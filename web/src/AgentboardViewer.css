@@ -75,6 +75,7 @@
 .taskdock-settings-item strong, .taskdock-agent-heading strong { display: block; margin-bottom: 4px; font-size: 12px; }
 .taskdock-item-actions button, .taskdock-key-row button { padding: 5px 8px; border: 1px solid var(--border); border-radius: 6px; background: transparent; color: var(--text-secondary); font-size: 11px; cursor: pointer; }
 .taskdock-item-actions button:hover, .taskdock-key-row button:hover { background: var(--surface-hover); }
+.taskdock-item-actions button.taskdock-danger { color: var(--danger); }
 .taskdock-agent-heading, .taskdock-key-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
 .taskdock-agent-heading > div:first-child { min-width: 0; }
 .taskdock-agent-heading small { display: block; overflow-wrap: anywhere; }

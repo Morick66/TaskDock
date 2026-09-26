@@ -65,7 +65,7 @@ export function createAgentBoardServer(options = {}) {
   const db = new TaskboardDatabase(path.join(dataDir, "taskboard.sqlite"));
   const sql = db.database;
   sql.exec(`
-    CREATE TABLE IF NOT EXISTS agentboard_agents (id TEXT PRIMARY KEY, name TEXT NOT NULL, created_at TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS agentboard_agents (id TEXT PRIMARY KEY, name TEXT NOT NULL, created_at TEXT NOT NULL, deleted_at TEXT);
     CREATE TABLE IF NOT EXISTS agentboard_agent_projects (agent_id TEXT NOT NULL REFERENCES agentboard_agents(id), project_id TEXT NOT NULL REFERENCES projects(id), PRIMARY KEY(agent_id, project_id));
     CREATE TABLE IF NOT EXISTS agentboard_keys (id TEXT PRIMARY KEY, agent_id TEXT NOT NULL REFERENCES agentboard_agents(id), key_hash TEXT NOT NULL UNIQUE, revoked_at TEXT, created_at TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS agentboard_claims (task_id TEXT PRIMARY KEY REFERENCES tasks(id) ON DELETE CASCADE, agent_id TEXT NOT NULL REFERENCES agentboard_agents(id), claimed_at TEXT NOT NULL);
@@ -73,12 +73,15 @@ export function createAgentBoardServer(options = {}) {
     CREATE TABLE IF NOT EXISTS agentboard_artifacts (id TEXT PRIMARY KEY, task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE, agent_id TEXT NOT NULL REFERENCES agentboard_agents(id), agent_name TEXT NOT NULL, type TEXT NOT NULL, title TEXT NOT NULL, content TEXT, url TEXT, attachment_id TEXT REFERENCES attachments(id), created_at TEXT NOT NULL);
     CREATE INDEX IF NOT EXISTS agentboard_artifacts_task ON agentboard_artifacts(task_id, created_at);
   `);
+  if (!sql.prepare("PRAGMA table_info(agentboard_agents)").all().some((column) => column.name === "deleted_at")) {
+    sql.exec("ALTER TABLE agentboard_agents ADD COLUMN deleted_at TEXT");
+  }
 
   function authenticate(request) {
     const bearer = /^Bearer (.+)$/.exec(request.headers.authorization ?? "");
     if (bearer && safeEqual(bearer[1], adminKey)) return { role: "admin", id: "admin", name: "Administrator" };
     if (bearer) {
-      const row = sql.prepare(`SELECT a.id, a.name FROM agentboard_keys k JOIN agentboard_agents a ON a.id = k.agent_id WHERE k.key_hash = ? AND k.revoked_at IS NULL`).get(hash(bearer[1]));
+      const row = sql.prepare(`SELECT a.id, a.name FROM agentboard_keys k JOIN agentboard_agents a ON a.id = k.agent_id WHERE k.key_hash = ? AND k.revoked_at IS NULL AND a.deleted_at IS NULL`).get(hash(bearer[1]));
       if (row) return { ...row, role: "agent" };
     }
     const cookie = /(?:^|;\s*)agentboard_session=([^;]+)/.exec(request.headers.cookie ?? "")?.[1];
@@ -115,7 +118,7 @@ export function createAgentBoardServer(options = {}) {
     return { ...project, archivedAt: row?.archived_at ?? null };
   }
   function agentInfo(agentId) {
-    const row = sql.prepare("SELECT id, name, created_at FROM agentboard_agents WHERE id = ?").get(agentId);
+    const row = sql.prepare("SELECT id, name, created_at FROM agentboard_agents WHERE id = ? AND deleted_at IS NULL").get(agentId);
     if (!row) throw new ApiError(404, "AGENT_NOT_FOUND", "Agent not found");
     const keys = sql.prepare("SELECT id, created_at, revoked_at FROM agentboard_keys WHERE agent_id = ? ORDER BY created_at DESC").all(agentId).map((key) => ({ id: key.id, createdAt: key.created_at, revokedAt: key.revoked_at }));
     return { id: row.id, name: row.name, createdAt: row.created_at, keys };
@@ -239,7 +242,7 @@ export function createAgentBoardServer(options = {}) {
     if (pathname === "/api/revisions" && request.method === "GET") return json(response, 200, { changed: true, revision: Date.now() });
     if (pathname === "/api/agents" && request.method === "GET") {
       admin(principal);
-      return json(response, 200, { agents: sql.prepare("SELECT id FROM agentboard_agents ORDER BY created_at, id").all().map((row) => agentInfo(row.id)) });
+      return json(response, 200, { agents: sql.prepare("SELECT id FROM agentboard_agents WHERE deleted_at IS NULL ORDER BY created_at, id").all().map((row) => agentInfo(row.id)) });
     }
     if (pathname === "/api/agents" && request.method === "POST") {
       admin(principal); const input = await body(request);
@@ -263,10 +266,31 @@ export function createAgentBoardServer(options = {}) {
       sql.prepare("UPDATE agentboard_agents SET name = ? WHERE id = ?").run(name, id);
       return json(response, 200, { agent: agentInfo(id) });
     }
+    if (agentRoute && request.method === "DELETE") {
+      admin(principal); const id = decodeURIComponent(agentRoute[1]);
+      const agent = agentInfo(id);
+      const now = new Date().toISOString();
+      sql.exec("BEGIN IMMEDIATE");
+      try {
+        const claims = sql.prepare("SELECT task_id FROM agentboard_claims WHERE agent_id = ?").all(id);
+        for (const claim of claims) {
+          sql.prepare("UPDATE tasks SET status = 'todo', version = version + 1, updated_at = ? WHERE id = ?").run(now, claim.task_id);
+          sql.prepare("DELETE FROM agentboard_claims WHERE task_id = ?").run(claim.task_id);
+          sql.prepare(`INSERT INTO task_activities (id, task_id, actor_type, actor_id, actor_name, actor_avatar_url, changes, created_at)
+            VALUES (?, ?, 'user', ?, ?, NULL, ?, ?)`).run(randomUUID(), claim.task_id, principal.id, principal.name,
+            JSON.stringify([{ field: "claim", before: actor(agent), after: null }]), now);
+        }
+        sql.prepare("DELETE FROM agentboard_keys WHERE agent_id = ?").run(id);
+        sql.prepare("DELETE FROM agentboard_agent_projects WHERE agent_id = ?").run(id);
+        sql.prepare("UPDATE agentboard_agents SET deleted_at = ? WHERE id = ?").run(now, id);
+        sql.exec("COMMIT");
+      } catch (error) { sql.exec("ROLLBACK"); throw error; }
+      response.writeHead(204); return response.end();
+    }
     const keyRoute = /^\/api\/agents\/([^/]+)\/keys(?:\/([^/]+))?$/.exec(pathname);
     if (keyRoute) {
       admin(principal); const agentId = decodeURIComponent(keyRoute[1]);
-      if (!sql.prepare("SELECT 1 FROM agentboard_agents WHERE id = ?").get(agentId)) throw new ApiError(404, "AGENT_NOT_FOUND", "Agent not found");
+      agentInfo(agentId);
       if (request.method === "POST" && !keyRoute[2]) {
         const key = `agb_${randomBytes(32).toString("base64url")}`; const id = randomUUID();
         sql.exec("BEGIN IMMEDIATE");

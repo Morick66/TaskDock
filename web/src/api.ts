@@ -251,6 +251,10 @@ export async function updateTaskdockAgent(input: { id: string; name: string }): 
   return (await request<{ agent: TaskdockAgent }>(`/api/agents/${encodeURIComponent(input.id)}`, { method: "PATCH", body: JSON.stringify({ name: input.name }) })).agent;
 }
 
+export async function deleteTaskdockAgent(agentId: string): Promise<void> {
+  await request<void>(`/api/agents/${encodeURIComponent(agentId)}`, { method: "DELETE" });
+}
+
 export async function issueTaskdockKey(agentId: string): Promise<{ id: string; key: string }> {
   return request(`/api/agents/${encodeURIComponent(agentId)}/keys`, { method: "POST" });
 }
