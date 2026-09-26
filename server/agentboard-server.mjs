@@ -211,6 +211,11 @@ export function createAgentBoardServer(options = {}) {
     const pathname = url.pathname;
     if (pathname === "/health") return json(response, 200, { status: "ok" });
     if (pathname === "/api/meta" && request.method === "GET") return json(response, 200, { mode: "agentboard", productName: "TaskDock", realtime: { transport: "poll", intervalMs: 3000 }, capabilities: { localAiChat: false } });
+    if (pathname === "/skills/taskdock-collaboration/SKILL.md" && request.method === "GET") {
+      const skill = await readFile(path.join(ROOT, "skills", "taskdock-collaboration", "SKILL.md"));
+      response.writeHead(200, { "content-type": "text/markdown; charset=utf-8", "cache-control": "no-store" });
+      return response.end(skill);
+    }
     if (request.method === "GET" && !pathname.startsWith("/api/") && pathname !== "/mcp") {
       let target = path.resolve(staticDir, `.${pathname}`);
       if (!target.startsWith(`${staticDir}${path.sep}`) && target !== staticDir) throw new ApiError(404, "NOT_FOUND", "Not found");

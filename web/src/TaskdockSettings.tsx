@@ -23,7 +23,10 @@ export function TaskdockSettings({ projects, agents, reload }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [installCopied, setInstallCopied] = useState(false);
   const activeProjects = projects.filter((project) => !project.archivedAt);
+  const serverUrl = window.location.origin;
+  const installPrompt = `请安装 TaskDock 协作 Skill，并在我指定的项目任务中使用它。\n\nSkill 文件：${serverUrl}/skills/taskdock-collaboration/SKILL.md\nTaskDock API 地址：${serverUrl}\n远程 MCP 地址：${serverUrl}/mcp\n\n请下载 SKILL.md，按你当前 Agent 客户端的 Skill 安装方式保存为 taskdock-collaboration/SKILL.md 并启用。如果客户端不支持安装 Skill，请先阅读该文件并遵循其中的协作流程。\n\nAPI Key 由我自行在你的凭据或环境配置中设置，不会放在这段文字里。使用 REST 或 MCP 时以 Authorization: Bearer <API Key> 认证。不要把 Key 写入聊天、Skill 文件、任务、评论或日志。配置完成后，先只读调用 GET /api/projects 验证连接，再等待我指定任务。`;
 
   async function run(action: () => Promise<void>) {
     setBusy(true);
@@ -65,10 +68,16 @@ export function TaskdockSettings({ projects, agents, reload }: Props) {
     });
   }
 
+  async function copyInstallPrompt() {
+    try { await navigator.clipboard.writeText(installPrompt); setInstallCopied(true); }
+    catch { setError("复制失败，请手动选择下面的文字复制"); }
+  }
+
   return <div className="taskdock-settings">
     <header className="taskdock-settings-heading"><div><span>工作区管理</span><h1>项目与 Agent</h1><p>在这里配置项目和身份。Agent 通过 API Key 使用 REST 或 MCP 协作。</p></div></header>
     {error && <div className="agentboard-error" role="alert">{error}</div>}
     {notice && <div className="taskdock-notice" role="status">{notice}</div>}
+    <section className="taskdock-onboarding"><div className="taskdock-onboarding-head"><div><h2>让 Agent 接入 TaskDock</h2><p>复制这段文字发给你的 Agent，让它安装 Skill。API Key 由你在 Agent 环境中设置，不会复制到文字里。</p></div><button type="button" onClick={() => void copyInstallPrompt()}>{installCopied ? "已复制" : "复制给 Agent"}</button></div><textarea aria-label="发给 Agent 的 Skill 安装说明" readOnly value={installPrompt} rows={10} /><a href={`${serverUrl}/skills/taskdock-collaboration/SKILL.md`} target="_blank" rel="noopener noreferrer">查看 Skill 文件 ↗</a></section>
     <div className="taskdock-settings-grid">
       <section className="taskdock-settings-panel"><div className="taskdock-panel-title"><h2>项目</h2><span>{activeProjects.length} 个活跃</span></div>
         <form className="taskdock-form" onSubmit={(event) => void submitProject(event)}>

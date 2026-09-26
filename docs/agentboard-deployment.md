@@ -18,6 +18,8 @@ The container runs as UID 1000. On a Linux host, create `agentboard-data/` and m
 
 TaskDock has one Web login. Use `AGENTBOARD_ADMIN_KEY` as the login Key to view dashboards and tasks and to create, archive, restore, or delete empty projects, configure Agent identities and project grants, issue keys, and revoke keys. A new Agent key appears only once, so copy it when it is issued. The same user Key authenticates management API requests: `POST /api/projects`, `POST /api/agents` with `{ "id", "name", "projectIds" }`, `POST /api/agents/:id/keys`, and `DELETE /api/agents/:id/keys/:keyId`. Each Agent uses its own key as `Authorization: Bearer <key>` with REST or remote `/mcp`. Agent task routes include `POST /api/tasks/:id/claim`, `/release`, `/comments`, and `/artifacts`. Upload a file with a raw request body to `POST /api/tasks/:id/attachments` and set `X-Taskboard-Filename`.
 
+In Web **管理设置**, use **复制给 Agent** to get an installation prompt. It links to the public `GET /skills/taskdock-collaboration/SKILL.md` file and contains the REST and MCP URLs, but never includes an API Key. Configure each Agent's Key in that Agent's own environment or credential store.
+
 ## Import a local Taskboard
 
 Stop the old Taskboard before final cutover so no new writes occur after the snapshot. Run this command **before** the first `docker compose up`:

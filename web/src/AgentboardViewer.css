@@ -44,6 +44,13 @@
 .taskdock-settings-heading span { color: var(--text-tertiary); font-size: 11px; }
 .taskdock-settings-heading h1 { margin: 7px 0; font-size: 25px; }
 .taskdock-settings-heading p { color: var(--text-secondary); font-size: 12px; }
+.taskdock-onboarding { margin-bottom: 20px; padding: 22px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+.taskdock-onboarding-head { display: flex; justify-content: space-between; align-items: start; gap: 20px; }
+.taskdock-onboarding h2 { margin: 0 0 7px; font-size: 15px; }
+.taskdock-onboarding p { margin: 0 0 15px; color: var(--text-secondary); font-size: 12px; }
+.taskdock-onboarding button { flex: none; padding: 8px 12px; border: 0; border-radius: 7px; background: var(--accent); color: white; cursor: pointer; }
+.taskdock-onboarding textarea { width: 100%; resize: vertical; padding: 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--text-secondary); font-family: inherit; font-size: 12px; line-height: 1.6; }
+.taskdock-onboarding a { display: inline-block; margin-top: 10px; color: var(--accent); font-size: 11px; }
 .taskdock-settings-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; align-items: start; }
 .taskdock-settings-panel { min-width: 0; padding: 22px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
 .taskdock-panel-title { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 18px; }
@@ -80,3 +87,4 @@
 @media (max-width: 700px) { .agentboard-header-note { display: none; } .agentboard-detail { padding: 20px; } .agentboard-list-agent { display: none; } }
 @media (max-width: 900px) { .taskdock-settings-grid { grid-template-columns: 1fr; } }
 @media (max-width: 700px) { .taskdock-settings { padding: 18px; } .taskdock-form-row { grid-template-columns: 1fr; } }
+@media (max-width: 700px) { .taskdock-onboarding-head { display: block; } .taskdock-onboarding button { margin-bottom: 14px; } }
