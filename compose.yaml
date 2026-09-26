@@ -2,7 +2,7 @@ services:
   agentboard:
     build: .
     ports:
-      - "${AGENTBOARD_PORT:-47823}:47823"
+      - "${AGENTBOARD_BIND_HOST:-127.0.0.1}:${AGENTBOARD_PORT:-47823}:47823"
     environment:
       AGENTBOARD_HOST: 0.0.0.0
       AGENTBOARD_PORT: 47823

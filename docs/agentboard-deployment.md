@@ -13,7 +13,7 @@ AGENTBOARD_SESSION_SECRET=replace-with-a-long-random-session-secret
 AGENTBOARD_PORT=47823
 ```
 
-Then run `docker compose up --build -d` and open `http://localhost:47823`. Put an HTTPS reverse proxy in front of the service when exposing it outside the host, so Agent keys and Web login credentials travel over TLS. Keep `.env` and the `agentboard-data/` directory private.
+Then run `docker compose up --build -d` and open `http://localhost:47823`. Compose binds the service to the host loopback address by default; set `AGENTBOARD_BIND_HOST` only if a separate reverse proxy must connect over the host network. Put an HTTPS reverse proxy in front of the service when exposing it outside the host, so Agent keys and Web login credentials travel over TLS. Keep `.env` and the `agentboard-data/` directory private.
 
 The container runs as UID 1000. On a Linux host, create `agentboard-data/` and make it writable by UID 1000 before starting Compose (`mkdir -p agentboard-data && sudo chown 1000:1000 agentboard-data`). An imported directory needs the same ownership. Docker Desktop typically handles host folder permissions through its file sharing layer.
 
