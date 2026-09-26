@@ -58,10 +58,9 @@ export function createAgentBoardServer(options = {}) {
   const staticDir = path.resolve(options.staticDirectory ?? path.join(ROOT, "dist", "web"));
   const attachmentsDir = path.join(dataDir, "attachments");
   const adminKey = options.adminKey ?? env.AGENTBOARD_ADMIN_KEY;
-  const viewerPassword = options.viewerPassword ?? env.AGENTBOARD_VIEWER_PASSWORD;
   const sessionSecret = options.sessionSecret ?? env.AGENTBOARD_SESSION_SECRET;
-  if (!adminKey || !viewerPassword || !sessionSecret) {
-    throw new Error("AGENTBOARD_ADMIN_KEY, AGENTBOARD_VIEWER_PASSWORD and AGENTBOARD_SESSION_SECRET are required");
+  if (!adminKey || !sessionSecret) {
+    throw new Error("AGENTBOARD_ADMIN_KEY and AGENTBOARD_SESSION_SECRET are required");
   }
   const db = new TaskboardDatabase(path.join(dataDir, "taskboard.sqlite"));
   const sql = db.database;
@@ -84,33 +83,26 @@ export function createAgentBoardServer(options = {}) {
     }
     const cookie = /(?:^|;\s*)agentboard_session=([^;]+)/.exec(request.headers.cookie ?? "")?.[1];
     if (cookie) {
-      const [first, second, third] = cookie.split(".");
-      const role = third ? first : "viewer";
-      const expiry = third ? second : first;
-      const proof = third ?? second;
-      const expected = third ? hash(`${role}:${expiry}:${sessionSecret}`) : hash(`${expiry}:${sessionSecret}`);
-      if ((role === "viewer" || role === "admin") && /^\d+$/.test(expiry) && proof && Number(expiry) > Date.now() && safeEqual(proof, expected)) {
-        return { role, id: role, name: role === "admin" ? "Administrator" : "Viewer" };
+      const [role, expiry, proof] = cookie.split(".");
+      if (role === "admin" && /^\d+$/.test(expiry) && proof && Number(expiry) > Date.now() && safeEqual(proof, hash(`${role}:${expiry}:${sessionSecret}`))) {
+        return { role: "admin", id: "admin", name: "User" };
       }
     }
     throw new ApiError(401, "UNAUTHORIZED", "Authentication required");
   }
 
   function scope(principal, projectId) {
-    if (principal.role === "admin" || principal.role === "viewer") return;
+    if (principal.role === "admin") return;
     const grant = sql.prepare("SELECT 1 FROM agentboard_agent_projects WHERE agent_id = ? AND project_id = ?").get(principal.id, projectId);
     if (!grant) throw new ApiError(403, "PROJECT_FORBIDDEN", "Agent has no access to this project");
-  }
-  function writable(principal) {
-    if (principal.role === "viewer") throw new ApiError(403, "READ_ONLY", "Viewer sessions are read-only");
   }
   function admin(principal) {
     if (principal.role !== "admin") throw new ApiError(403, "ADMIN_REQUIRED", "Administrator key required");
   }
-  function sessionCookie(request, role) {
+  function sessionCookie(request) {
     const expiry = String(Date.now() + 24 * 60 * 60 * 1000);
     const secure = request.socket.encrypted || request.headers["x-forwarded-proto"] === "https" ? "; Secure" : "";
-    return `agentboard_session=${role}.${expiry}.${hash(`${role}:${expiry}:${sessionSecret}`)}; HttpOnly; SameSite=Strict; Path=/; Max-Age=86400${secure}`;
+    return `agentboard_session=admin.${expiry}.${hash(`admin:${expiry}:${sessionSecret}`)}; HttpOnly; SameSite=Strict; Path=/; Max-Age=86400${secure}`;
   }
   function projectArchived(projectId) {
     return Boolean(sql.prepare("SELECT 1 FROM agentboard_project_archives WHERE project_id = ?").get(projectId));
@@ -146,7 +138,6 @@ export function createAgentBoardServer(options = {}) {
       randomUUID(), taskId, principal.id, principal.name, JSON.stringify([{ field, before: oldValue, after: newValue }]), new Date().toISOString());
   }
   function transition(principal, task, action, version) {
-    writable(principal);
     activeProject(task.projectId);
     if (action === "claim" && principal.role !== "agent") throw new ApiError(403, "AGENT_REQUIRED", "Only an Agent can claim tasks");
     if (!Number.isSafeInteger(version) || version < 1) throw new ApiError(400, "INVALID_VERSION", "Current task version is required");
@@ -169,7 +160,7 @@ export function createAgentBoardServer(options = {}) {
     return taskFor(principal, current.id);
   }
   function submitArtifact(principal, task, input) {
-    writable(principal); owner(principal, task);
+    owner(principal, task);
     activeProject(task.projectId);
     const type = requiredString(input.type, "type", 40);
     const title = requiredString(input.title, "title");
@@ -199,7 +190,7 @@ export function createAgentBoardServer(options = {}) {
     const task = taskFor(principal, args.taskId);
     if (name === "claim_task" || name === "release_task") return { task: transition(principal, task, name === "claim_task" ? "claim" : "release", args.version) };
     if (name === "update_task") {
-      writable(principal); owner(principal, task);
+      owner(principal, task);
       activeProject(task.projectId);
       const { taskId: _taskId, ...patch } = args;
       const { version, changes, assigneeTarget, threadId, threadBinding, agentSession } = parseTaskPatch(patch, () => null);
@@ -207,7 +198,6 @@ export function createAgentBoardServer(options = {}) {
       return { task: taskFor(principal, db.updateTask(task.id, version, changes, undefined, undefined, actor(principal), undefined).id) };
     }
     if (name === "add_comment") {
-      writable(principal);
       activeProject(task.projectId);
       const comment = db.createComment(task.id, { body: requiredString(args.body, "body", 100_000), actor: actor(principal) });
       return { comment };
@@ -232,20 +222,15 @@ export function createAgentBoardServer(options = {}) {
     }
     if (pathname === "/api/agentboard/login" && request.method === "POST") {
       const input = await body(request);
-      if (!safeEqual(String(input.password ?? ""), viewerPassword)) throw new ApiError(401, "INVALID_LOGIN", "Invalid viewer password");
-      return json(response, 200, { authenticated: true, role: "viewer" }, { "set-cookie": sessionCookie(request, "viewer") });
-    }
-    if (pathname === "/api/agentboard/admin/login" && request.method === "POST") {
-      const input = await body(request);
-      if (!safeEqual(String(input.key ?? ""), adminKey)) throw new ApiError(401, "INVALID_LOGIN", "Invalid administrator key");
-      return json(response, 200, { authenticated: true, role: "admin" }, { "set-cookie": sessionCookie(request, "admin") });
+      if (!safeEqual(String(input.key ?? ""), adminKey)) throw new ApiError(401, "INVALID_LOGIN", "Invalid login key");
+      return json(response, 200, { authenticated: true }, { "set-cookie": sessionCookie(request) });
     }
     if (pathname === "/api/agentboard/logout" && request.method === "POST") {
       return json(response, 200, { authenticated: false }, { "set-cookie": "agentboard_session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0" });
     }
     if (pathname === "/api/agentboard/session" && request.method === "GET") {
-      try { const session = authenticate(request); return json(response, 200, { authenticated: true, role: session.role, viewer: session.role === "viewer" }); }
-      catch { return json(response, 200, { authenticated: false, viewer: false }); }
+      try { const session = authenticate(request); return json(response, 200, { authenticated: true, role: session.role }); }
+      catch { return json(response, 200, { authenticated: false }); }
     }
     const principal = authenticate(request);
     if (pathname === "/api/revisions" && request.method === "GET") return json(response, 200, { changed: true, revision: Date.now() });
@@ -338,7 +323,7 @@ export function createAgentBoardServer(options = {}) {
       return json(response, 200, await operation(principal, "list_tasks", filters));
     }
     if (pathname === "/api/tasks" && request.method === "POST") {
-      writable(principal); const input = await body(request);
+      const input = await body(request);
       const parsed = parseTaskCreate({ status: "todo", ...input }, () => null);
       scope(principal, parsed.projectId);
       activeProject(parsed.projectId);
@@ -358,7 +343,7 @@ export function createAgentBoardServer(options = {}) {
       if (action === "artifacts" && request.method === "POST") return json(response, 201, await operation(principal, "submit_artifact", { ...await body(request), taskId: id }));
       if (action === "attachments" && request.method === "GET") return json(response, 200, { attachments: db.listAttachments(task.id) });
       if (action === "attachments" && request.method === "POST") {
-        writable(principal); owner(principal, task);
+        owner(principal, task);
         activeProject(task.projectId);
         let filename;
         try { filename = decodeURIComponent(requiredString(request.headers["x-taskboard-filename"], "filename", 512)); }
@@ -392,7 +377,7 @@ export function createAgentBoardServer(options = {}) {
       return createReadStream(file).pipe(response);
     }
     if (pathname === "/mcp" && request.method === "POST") {
-      writable(principal); const rpc = await body(request);
+      const rpc = await body(request);
       if (rpc.method === "initialize") return json(response, 200, { jsonrpc: "2.0", id: rpc.id, result: { protocolVersion: rpc.params?.protocolVersion ?? "2025-11-25", capabilities: { tools: {} }, serverInfo: { name: "TaskDock", version: "1.0.0" } } });
       if (rpc.method === "notifications/initialized") { response.writeHead(202); return response.end(); }
       if (rpc.method === "tools/list") return json(response, 200, { jsonrpc: "2.0", id: rpc.id, result: { tools: [

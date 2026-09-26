@@ -8,7 +8,6 @@ Create a `.env` next to `compose.yaml` with unique secrets:
 
 ```dotenv
 AGENTBOARD_ADMIN_KEY=replace-with-a-long-random-admin-key
-AGENTBOARD_VIEWER_PASSWORD=replace-with-a-long-random-viewer-password
 AGENTBOARD_SESSION_SECRET=replace-with-a-long-random-session-secret
 AGENTBOARD_PORT=47823
 ```
@@ -17,7 +16,7 @@ Then run `docker compose up --build -d` and open `http://localhost:47823`. Compo
 
 The container runs as UID 1000. On a Linux host, create `agentboard-data/` and make it writable by UID 1000 before starting Compose (`mkdir -p agentboard-data && sudo chown 1000:1000 agentboard-data`). An imported directory needs the same ownership. Docker Desktop typically handles host folder permissions through its file sharing layer.
 
-The Web login has **查看** and **管理** modes. Use `AGENTBOARD_VIEWER_PASSWORD` to view dashboards and tasks; use `AGENTBOARD_ADMIN_KEY` in the management login to create, archive, restore, or delete empty projects, configure Agent identities and project grants, issue keys, and revoke keys. A new key appears only once, so copy it when it is issued. The same admin key authenticates management API requests: `POST /api/projects`, `POST /api/agents` with `{ "id", "name", "projectIds" }`, `POST /api/agents/:id/keys`, and `DELETE /api/agents/:id/keys/:keyId`. Each Agent uses its own key as `Authorization: Bearer <key>` with REST or remote `/mcp`. Agent task routes include `POST /api/tasks/:id/claim`, `/release`, `/comments`, and `/artifacts`. Upload a file with a raw request body to `POST /api/tasks/:id/attachments` and set `X-Taskboard-Filename`.
+TaskDock has one Web login. Use `AGENTBOARD_ADMIN_KEY` as the login Key to view dashboards and tasks and to create, archive, restore, or delete empty projects, configure Agent identities and project grants, issue keys, and revoke keys. A new Agent key appears only once, so copy it when it is issued. The same user Key authenticates management API requests: `POST /api/projects`, `POST /api/agents` with `{ "id", "name", "projectIds" }`, `POST /api/agents/:id/keys`, and `DELETE /api/agents/:id/keys/:keyId`. Each Agent uses its own key as `Authorization: Bearer <key>` with REST or remote `/mcp`. Agent task routes include `POST /api/tasks/:id/claim`, `/release`, `/comments`, and `/artifacts`. Upload a file with a raw request body to `POST /api/tasks/:id/attachments` and set `X-Taskboard-Filename`.
 
 ## Import a local Taskboard
 

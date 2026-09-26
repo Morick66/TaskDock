@@ -217,21 +217,12 @@ export async function getTaskboardMetadata(signal?: AbortSignal): Promise<Taskbo
 
 export function getAgentboardSession(signal?: AbortSignal): Promise<{
   authenticated: boolean;
-  viewer?: boolean;
-  role?: "viewer" | "admin";
 }> {
   return request("/api/agentboard/session", { signal });
 }
 
-export function loginAgentboard(password: string): Promise<void> {
+export function loginTaskdock(key: string): Promise<void> {
   return request<void>("/api/agentboard/login", {
-    method: "POST",
-    body: JSON.stringify({ password }),
-  });
-}
-
-export function loginTaskdockAdmin(key: string): Promise<void> {
-  return request<void>("/api/agentboard/admin/login", {
     method: "POST",
     body: JSON.stringify({ key }),
   });
