@@ -202,7 +202,8 @@ export function createAgentBoardServer(options = {}) {
       const input = await body(request);
       if (!safeEqual(String(input.password ?? ""), viewerPassword)) throw new ApiError(401, "INVALID_LOGIN", "Invalid viewer password");
       const expiry = String(Date.now() + 24 * 60 * 60 * 1000);
-      return json(response, 200, { authenticated: true, viewer: true }, { "set-cookie": `agentboard_session=${expiry}.${hash(`${expiry}:${sessionSecret}`)}; HttpOnly; SameSite=Strict; Path=/; Max-Age=86400` });
+      const secure = request.socket.encrypted || request.headers["x-forwarded-proto"] === "https" ? "; Secure" : "";
+      return json(response, 200, { authenticated: true, viewer: true }, { "set-cookie": `agentboard_session=${expiry}.${hash(`${expiry}:${sessionSecret}`)}; HttpOnly; SameSite=Strict; Path=/; Max-Age=86400${secure}` });
     }
     if (pathname === "/api/agentboard/session" && request.method === "GET") {
       try { const session = authenticate(request); return json(response, 200, { authenticated: true, viewer: session.role === "viewer" }); }
