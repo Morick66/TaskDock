@@ -6,6 +6,10 @@ A local-first issue board that runs in a browser and can be embedded in Codex th
 
 ![Codex Taskboard product screenshot](docs/assets/codex-taskboard.png)
 
+## AgentBoard service
+
+AgentBoard's standalone API, read-only Web board, and Docker deployment are documented in [AgentBoard deployment](docs/agentboard-deployment.md). The existing Codex Taskboard launcher and CLI instructions below describe the original local product.
+
 ## Requirements
 
 - Node.js 22.5 or newer

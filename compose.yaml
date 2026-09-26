@@ -1,0 +1,15 @@
+services:
+  agentboard:
+    build: .
+    ports:
+      - "${AGENTBOARD_PORT:-47823}:47823"
+    environment:
+      AGENTBOARD_HOST: 0.0.0.0
+      AGENTBOARD_PORT: 47823
+      AGENTBOARD_DATA_DIR: /data
+      AGENTBOARD_ADMIN_KEY: ${AGENTBOARD_ADMIN_KEY:?Set AGENTBOARD_ADMIN_KEY}
+      AGENTBOARD_VIEWER_PASSWORD: ${AGENTBOARD_VIEWER_PASSWORD:?Set AGENTBOARD_VIEWER_PASSWORD}
+      AGENTBOARD_SESSION_SECRET: ${AGENTBOARD_SESSION_SECRET:?Set AGENTBOARD_SESSION_SECRET}
+    volumes:
+      - ./agentboard-data:/data
+    restart: unless-stopped

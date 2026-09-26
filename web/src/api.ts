@@ -1,5 +1,6 @@
 import type {
   ActorIdentity,
+  Artifact,
   AiChatCatalog,
   AiChatAttachmentInput,
   AiChatRun,
@@ -212,6 +213,28 @@ export async function getProjectSummary(
 
 export async function getTaskboardMetadata(signal?: AbortSignal): Promise<TaskboardMetadata> {
   return request<TaskboardMetadata>("/api/meta", { signal });
+}
+
+export function getAgentboardSession(signal?: AbortSignal): Promise<{
+  authenticated: boolean;
+  viewer?: boolean;
+}> {
+  return request("/api/agentboard/session", { signal });
+}
+
+export function loginAgentboard(password: string): Promise<void> {
+  return request<void>("/api/agentboard/login", {
+    method: "POST",
+    body: JSON.stringify({ password }),
+  });
+}
+
+export async function listArtifacts(taskId: string, signal?: AbortSignal): Promise<Artifact[]> {
+  const data = await request<{ artifacts: Artifact[] }>(
+    `/api/tasks/${encodeURIComponent(taskId)}/artifacts`,
+    { signal },
+  );
+  return data.artifacts;
 }
 
 export async function getTaskboardRevision(

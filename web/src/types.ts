@@ -40,7 +40,7 @@ export interface DevelopmentScan {
 export interface TaskboardMetadata {
   manageTaskboardSkillPath?: string;
   capabilities?: TaskboardCapabilities;
-  mode?: "local" | "cloud";
+  mode?: "local" | "cloud" | "agentboard";
   realtime?:
     | { transport: "poll"; intervalMs: number }
     | { transport: "websocket"; endpoint: string };
@@ -440,6 +440,7 @@ export interface Task {
   creatorName: string;
   creatorAvatarUrl: string | null;
   assignee: ActorIdentity;
+  claimedBy?: ActorIdentity | null;
   developmentContext: DevelopmentContext | null;
   startDate: string | null;
   dueDate: string | null;
@@ -453,6 +454,18 @@ export interface Task {
   version: number;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface Artifact {
+  id: string;
+  taskId: string;
+  type: string;
+  title: string;
+  content: string | null;
+  url: string | null;
+  attachmentId: string | null;
+  agentName: string;
+  createdAt: string;
 }
 
 export interface JiraConnection {

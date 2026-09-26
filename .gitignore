@@ -1,4 +1,6 @@
 node_modules/
+.env
+agentboard-data/
 dist/
 .data/
 .wrangler/

@@ -6,6 +6,10 @@
 
 ![Codex Taskboard 产品截图](docs/assets/codex-taskboard.png)
 
+## AgentBoard 服务
+
+AgentBoard 独立 API、只读 Web 看板及 Docker 部署见 [AgentBoard 部署说明](docs/agentboard-deployment.md)。以下 Codex Taskboard 启动器和 CLI 说明对应原有本地产品。
+
 ## 系统要求
 
 - Node.js 22.5 或更高版本
