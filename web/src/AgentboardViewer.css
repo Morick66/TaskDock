@@ -1,48 +1,40 @@
-.agentboard-app { min-height: 100vh; color: #263341; background: #f7f8fa; font-family: Inter, system-ui, sans-serif; }
-.agentboard-header { height: 64px; padding: 0 28px; background: #fff; border-bottom: 1px solid #e7eaee; display: flex; align-items: center; justify-content: space-between; }
-.agentboard-header > div { display: flex; align-items: baseline; gap: 15px; }
-.agentboard-header strong, .agentboard-brand { color: #292f38; font-size: 19px; letter-spacing: -.04em; }
-.agentboard-header span { color: #8a929d; font-size: 13px; }
-.agentboard-header button, .agentboard-login button { border: 1px solid #dce1e8; background: #fff; border-radius: 8px; padding: 8px 14px; color: #344457; cursor: pointer; }
-.agentboard-layout { display: flex; min-height: calc(100vh - 64px); }
-.agentboard-sidebar { width: 220px; flex-shrink: 0; padding: 28px 14px; border-right: 1px solid #e7eaee; background: #fbfcfd; }
-.agentboard-sidebar-title { margin: 0 12px 12px; font-size: 12px; font-weight: 700; color: #87909c; }
-.agentboard-sidebar button { width: 100%; display: flex; justify-content: space-between; text-align: left; border: 0; background: transparent; border-radius: 8px; padding: 10px 12px; color: #445365; cursor: pointer; }
-.agentboard-sidebar button.active { background: #e9eefb; color: #2d56aa; font-weight: 650; }
-.agentboard-sidebar button span { opacity: .65; }
-.agentboard-main { min-width: 0; flex: 1; padding: 30px; overflow: hidden; }
-.agentboard-heading { display: flex; align-items: baseline; gap: 12px; margin-bottom: 22px; }
-.agentboard-heading h1 { font-size: 22px; margin: 0; }
-.agentboard-heading span { color: #8a929d; font-size: 13px; }
-.agentboard-board { display: flex; gap: 14px; overflow-x: auto; min-height: 65vh; padding-bottom: 20px; }
-.agentboard-column { width: 260px; min-width: 260px; border-radius: 12px; background: #eff1f5; padding: 12px; }
-.agentboard-column h2 { font-size: 13px; margin: 3px 4px 14px; font-weight: 700; display: flex; justify-content: space-between; }
-.agentboard-column h2 span { color: #8a929d; }
-.agentboard-cards { display: grid; gap: 9px; }
-.agentboard-card { border: 1px solid #e5e8ed; box-shadow: 0 1px 3px #2633410c; background: #fff; border-radius: 9px; width: 100%; padding: 14px; text-align: left; display: grid; gap: 9px; cursor: pointer; color: inherit; }
-.agentboard-card:hover, .agentboard-card.selected { border-color: #93aee6; }
-.agentboard-identifier, .agentboard-claim { color: #7c8794; font-size: 12px; }
-.agentboard-card strong { font-size: 14px; line-height: 1.4; }
-.agentboard-detail-backdrop { position: fixed; inset: 0; background: #18253770; display: flex; justify-content: flex-end; z-index: 50; }
-.agentboard-detail { width: min(100%, 620px); height: 100%; overflow-y: auto; background: #fff; padding: 26px 32px; box-shadow: -8px 0 30px #1b283420; }
-.agentboard-detail-head { display: flex; align-items: center; justify-content: space-between; color: #87909c; font-size: 13px; }
-.agentboard-detail-head button { border: 0; background: transparent; font-size: 26px; cursor: pointer; color: #728092; }
-.agentboard-detail h2 { font-size: 23px; line-height: 1.35; margin: 20px 0; }
-.agentboard-detail h3 { font-size: 15px; margin: 0 0 13px; }
-.agentboard-detail section { border-top: 1px solid #e9edf1; padding: 24px 0; }
-.agentboard-properties { display: flex; flex-wrap: wrap; gap: 9px; margin-bottom: 25px; }
-.agentboard-properties span { padding: 6px 10px; background: #f1f4f8; border-radius: 6px; font-size: 12px; }
-.agentboard-body { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.6; margin: 8px 0 0; font-size: 14px; }
-.agentboard-artifact, .agentboard-event { border: 1px solid #e9edf1; border-radius: 9px; padding: 13px; margin-bottom: 9px; }
+.agentboard-app { color: var(--text-primary); }
+.agentboard-header-note { color: var(--text-tertiary); font-size: 11px; }
+.agentboard-project-menu { display: block; }
+.agentboard-project-menu .project-menu-list { max-height: 360px; overflow-y: auto; }
+.agentboard-board-layout { flex: 1; min-height: 0; padding: 0 16px 8px; }
+.agentboard-board-layout .board-scroll { max-width: none; }
+.agentboard-board-layout .board { grid-template-columns: repeat(7, minmax(300px, 1fr)); min-width: 2244px; }
+.agentboard-readonly-card { cursor: default; }
+.agentboard-readonly-card.selected { border-color: var(--accent); }
+.agentboard-readonly-card .task-card-description { overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
+.agentboard-card-footer { display: flex; justify-content: space-between; gap: 8px; color: var(--text-tertiary); font-size: 10px; }
+.agentboard-refresh { width: 27px; height: 27px; border: var(--border-hairline) solid var(--border); border-radius: 7px; background: var(--surface); color: var(--text-secondary); font-size: 18px; cursor: pointer; }
+.agentboard-refresh:hover { background: var(--surface-hover); }
+.agentboard-list { flex: 1; min-height: 0; }
+.agentboard-list-row { width: 100%; color: var(--text-secondary); text-align: left; cursor: pointer; }
+.agentboard-list-row .agentboard-list-agent { margin-left: auto; color: var(--text-secondary); font-size: 11px; }
+.agentboard-detail-backdrop { position: fixed; inset: 0; display: flex; justify-content: flex-end; background: #0009; z-index: 50; }
+.agentboard-detail { width: min(100%, 660px); height: 100%; overflow-y: auto; padding: 28px 36px; border-left: 1px solid var(--border); background: var(--bg); box-shadow: var(--dialog-shadow); }
+.agentboard-detail-head { display: flex; align-items: center; justify-content: space-between; color: var(--text-tertiary); font-size: 11px; }
+.agentboard-detail-head button { border: 0; background: transparent; color: var(--text-secondary); font-size: 24px; cursor: pointer; }
+.agentboard-detail h2 { margin: 20px 0; color: var(--text-primary); font-size: 23px; line-height: 1.35; }
+.agentboard-detail h3 { margin: 0 0 12px; color: var(--text-primary); font-size: 13px; }
+.agentboard-detail section { padding: 22px 0; border-top: 1px solid var(--border); }
+.agentboard-properties { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 22px; }
+.agentboard-properties span { padding: 6px 10px; border-radius: 6px; background: var(--surface-muted); color: var(--text-secondary); font-size: 11px; }
+.agentboard-body { margin: 8px 0 0; color: var(--text-secondary); font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; white-space: pre-wrap; }
+.agentboard-artifact, .agentboard-event { margin-bottom: 9px; padding: 13px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface); }
 .agentboard-artifact > div { display: grid; gap: 5px; }
-.agentboard-artifact small, .agentboard-event small { color: #87909c; }
-.agentboard-artifact a { display: inline-block; margin-top: 10px; color: #315fba; }
-.agentboard-login { min-height: 100vh; display: grid; place-items: center; background: #f7f8fa; color: #263341; }
-.agentboard-login form { width: min(90vw, 380px); display: grid; gap: 15px; padding: 32px; background: #fff; border: 1px solid #e7eaee; border-radius: 14px; box-shadow: 0 15px 45px #26334112; }
+.agentboard-artifact small, .agentboard-event small { color: var(--text-tertiary); }
+.agentboard-artifact a { display: inline-block; margin-top: 10px; color: var(--accent); }
+.agentboard-login { display: grid; min-height: 100vh; place-items: center; background: var(--bg); color: var(--text-primary); }
+.agentboard-login form { display: grid; width: min(90vw, 380px); gap: 15px; padding: 32px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); box-shadow: var(--dialog-shadow); }
+.agentboard-brand { color: var(--text-primary); font-size: 19px; font-weight: 650; }
 .agentboard-login h1 { margin: 8px 0 0; font-size: 21px; }
-.agentboard-login p { margin: 0; color: #778391; font-size: 13px; line-height: 1.5; }
-.agentboard-login label { font-size: 13px; font-weight: 600; }
-.agentboard-login input { border: 1px solid #dce1e8; border-radius: 8px; padding: 10px 12px; font: inherit; }
-.agentboard-login button { background: #315fba; color: #fff; border-color: #315fba; }
-.agentboard-error { color: #a52d2d !important; padding: 9px 12px; background: #fff0ef; border-radius: 7px; }
-@media (max-width: 700px) { .agentboard-layout { display: block; } .agentboard-sidebar { width: 100%; display: flex; overflow-x: auto; padding: 10px; border-bottom: 1px solid #e7eaee; } .agentboard-sidebar-title { display: none; } .agentboard-sidebar button { width: auto; min-width: max-content; gap: 12px; } .agentboard-main { padding: 20px 14px; } .agentboard-detail { padding: 20px; } }
+.agentboard-login p { margin: 0; color: var(--text-secondary); font-size: 12px; line-height: 1.5; }
+.agentboard-login label { font-size: 12px; font-weight: 600; }
+.agentboard-login input { padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--text-primary); font: inherit; }
+.agentboard-login button { padding: 9px; border: 0; border-radius: 8px; background: var(--accent); color: white; cursor: pointer; }
+.agentboard-error { margin: 8px 16px; padding: 9px 12px; border-radius: 7px; background: var(--danger-soft); color: var(--danger); }
+@media (max-width: 700px) { .agentboard-header-note { display: none; } .agentboard-detail { padding: 20px; } .agentboard-list-agent { display: none; } }
