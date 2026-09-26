@@ -93,8 +93,7 @@ export function createAgentBoardServer(options = {}) {
 
   function scope(principal, projectId) {
     if (principal.role === "admin") return;
-    const grant = sql.prepare("SELECT 1 FROM agentboard_agent_projects WHERE agent_id = ? AND project_id = ?").get(principal.id, projectId);
-    if (!grant) throw new ApiError(403, "PROJECT_FORBIDDEN", "Agent has no access to this project");
+    activeProject(projectId);
   }
   function admin(principal) {
     if (principal.role !== "admin") throw new ApiError(403, "ADMIN_REQUIRED", "Administrator key required");
@@ -118,9 +117,8 @@ export function createAgentBoardServer(options = {}) {
   function agentInfo(agentId) {
     const row = sql.prepare("SELECT id, name, created_at FROM agentboard_agents WHERE id = ?").get(agentId);
     if (!row) throw new ApiError(404, "AGENT_NOT_FOUND", "Agent not found");
-    const projectIds = sql.prepare("SELECT project_id FROM agentboard_agent_projects WHERE agent_id = ? ORDER BY project_id").all(agentId).map((grant) => grant.project_id);
     const keys = sql.prepare("SELECT id, created_at, revoked_at FROM agentboard_keys WHERE agent_id = ? ORDER BY created_at DESC").all(agentId).map((key) => ({ id: key.id, createdAt: key.created_at, revokedAt: key.revoked_at }));
-    return { id: row.id, name: row.name, createdAt: row.created_at, projectIds, keys };
+    return { id: row.id, name: row.name, createdAt: row.created_at, keys };
   }
   function taskFor(principal, id) {
     const task = db.getTask(id);
@@ -183,7 +181,7 @@ export function createAgentBoardServer(options = {}) {
     if (name === "list_tasks") {
       const filters = { projectId: args.projectId, status: args.status, archived: "false" };
       if (filters.projectId) scope(principal, filters.projectId);
-      const tasks = db.listTasks(filters).filter((task) => (principal.role === "admin" || !projectArchived(task.projectId)) && (principal.role !== "agent" || sql.prepare("SELECT 1 FROM agentboard_agent_projects WHERE agent_id = ? AND project_id = ?").get(principal.id, task.projectId)));
+      const tasks = db.listTasks(filters).filter((task) => principal.role === "admin" || !projectArchived(task.projectId));
       return { tasks: tasks.map((task) => taskFor(principal, task.id)) };
     }
     if (name === "get_task") return { task: taskFor(principal, args.taskId) };
@@ -247,15 +245,14 @@ export function createAgentBoardServer(options = {}) {
       admin(principal); const input = await body(request);
       const id = requiredString(input.id, "id", 96); const name = requiredString(input.name, "name", 120);
       if (!/^[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$/.test(id)) throw new ApiError(400, "INVALID_AGENT_ID", "Agent ID must be a URL-safe identifier");
-      const projectIds = input.projectIds;
-      if (!Array.isArray(projectIds) || projectIds.length === 0) throw new ApiError(400, "INVALID_FIELD", "projectIds must be nonempty");
+      const key = `agb_${randomBytes(32).toString("base64url")}`;
       sql.exec("BEGIN IMMEDIATE");
       try {
         sql.prepare("INSERT INTO agentboard_agents (id, name, created_at) VALUES (?, ?, ?)").run(id, name, new Date().toISOString());
-        for (const projectId of new Set(projectIds)) { const project = validateProjectId(projectId); activeProject(project); sql.prepare("INSERT INTO agentboard_agent_projects (agent_id, project_id) VALUES (?, ?)").run(id, project); }
+        sql.prepare("INSERT INTO agentboard_keys (id, agent_id, key_hash, created_at) VALUES (?, ?, ?, ?)").run(randomUUID(), id, hash(key), new Date().toISOString());
         sql.exec("COMMIT");
       } catch (error) { sql.exec("ROLLBACK"); throw error; }
-      return json(response, 201, { agent: agentInfo(id) });
+      return json(response, 201, { agent: agentInfo(id), key });
     }
     const agentRoute = /^\/api\/agents\/([^/]+)$/.exec(pathname);
     if (agentRoute && request.method === "PATCH") {
@@ -263,15 +260,7 @@ export function createAgentBoardServer(options = {}) {
       agentInfo(id);
       const input = await body(request);
       const name = requiredString(input.name, "name", 120);
-      const projectIds = input.projectIds;
-      if (!Array.isArray(projectIds) || projectIds.length === 0) throw new ApiError(400, "INVALID_FIELD", "projectIds must be nonempty");
-      sql.exec("BEGIN IMMEDIATE");
-      try {
-        sql.prepare("UPDATE agentboard_agents SET name = ? WHERE id = ?").run(name, id);
-        sql.prepare("DELETE FROM agentboard_agent_projects WHERE agent_id = ?").run(id);
-        for (const projectId of new Set(projectIds)) { const project = validateProjectId(projectId); activeProject(project); sql.prepare("INSERT INTO agentboard_agent_projects (agent_id, project_id) VALUES (?, ?)").run(id, project); }
-        sql.exec("COMMIT");
-      } catch (error) { sql.exec("ROLLBACK"); throw error; }
+      sql.prepare("UPDATE agentboard_agents SET name = ? WHERE id = ?").run(name, id);
       return json(response, 200, { agent: agentInfo(id) });
     }
     const keyRoute = /^\/api\/agents\/([^/]+)\/keys(?:\/([^/]+))?$/.exec(pathname);
@@ -280,7 +269,12 @@ export function createAgentBoardServer(options = {}) {
       if (!sql.prepare("SELECT 1 FROM agentboard_agents WHERE id = ?").get(agentId)) throw new ApiError(404, "AGENT_NOT_FOUND", "Agent not found");
       if (request.method === "POST" && !keyRoute[2]) {
         const key = `agb_${randomBytes(32).toString("base64url")}`; const id = randomUUID();
-        sql.prepare("INSERT INTO agentboard_keys (id, agent_id, key_hash, created_at) VALUES (?, ?, ?, ?)").run(id, agentId, hash(key), new Date().toISOString());
+        sql.exec("BEGIN IMMEDIATE");
+        try {
+          sql.prepare("UPDATE agentboard_keys SET revoked_at = ? WHERE agent_id = ? AND revoked_at IS NULL").run(new Date().toISOString(), agentId);
+          sql.prepare("INSERT INTO agentboard_keys (id, agent_id, key_hash, created_at) VALUES (?, ?, ?, ?)").run(id, agentId, hash(key), new Date().toISOString());
+          sql.exec("COMMIT");
+        } catch (error) { sql.exec("ROLLBACK"); throw error; }
         return json(response, 201, { id, key });
       }
       if (request.method === "DELETE" && keyRoute[2]) {
@@ -290,7 +284,7 @@ export function createAgentBoardServer(options = {}) {
       }
     }
     if (pathname === "/api/projects" && request.method === "GET") {
-      const projects = db.listProjects().filter((p) => (principal.role === "admin" || !projectArchived(p.id)) && (principal.role !== "agent" || sql.prepare("SELECT 1 FROM agentboard_agent_projects WHERE agent_id = ? AND project_id = ?").get(principal.id, p.id))).map(projectInfo);
+      const projects = db.listProjects().filter((p) => (p.id !== "local" || p.issueCount > 0) && (principal.role === "admin" || !projectArchived(p.id))).map(projectInfo);
       return json(response, 200, { projects });
     }
     if (pathname === "/api/projects" && request.method === "POST") {

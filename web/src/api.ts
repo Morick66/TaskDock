@@ -236,7 +236,6 @@ export interface TaskdockAgent {
   id: string;
   name: string;
   createdAt: string;
-  projectIds: string[];
   keys: { id: string; createdAt: string; revokedAt: string | null }[];
 }
 
@@ -244,12 +243,12 @@ export async function listTaskdockAgents(): Promise<TaskdockAgent[]> {
   return (await request<{ agents: TaskdockAgent[] }>("/api/agents")).agents;
 }
 
-export async function createTaskdockAgent(input: { id: string; name: string; projectIds: string[] }): Promise<TaskdockAgent> {
-  return (await request<{ agent: TaskdockAgent }>("/api/agents", { method: "POST", body: JSON.stringify(input) })).agent;
+export async function createTaskdockAgent(input: { id: string; name: string }): Promise<{ agent: TaskdockAgent; key: string }> {
+  return request<{ agent: TaskdockAgent; key: string }>("/api/agents", { method: "POST", body: JSON.stringify(input) });
 }
 
-export async function updateTaskdockAgent(input: { id: string; name: string; projectIds: string[] }): Promise<TaskdockAgent> {
-  return (await request<{ agent: TaskdockAgent }>(`/api/agents/${encodeURIComponent(input.id)}`, { method: "PATCH", body: JSON.stringify({ name: input.name, projectIds: input.projectIds }) })).agent;
+export async function updateTaskdockAgent(input: { id: string; name: string }): Promise<TaskdockAgent> {
+  return (await request<{ agent: TaskdockAgent }>(`/api/agents/${encodeURIComponent(input.id)}`, { method: "PATCH", body: JSON.stringify({ name: input.name }) })).agent;
 }
 
 export async function issueTaskdockKey(agentId: string): Promise<{ id: string; key: string }> {

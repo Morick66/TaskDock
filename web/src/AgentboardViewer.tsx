@@ -59,7 +59,6 @@ export function AgentboardViewer() {
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [detail, setDetail] = useState<Detail | null>(null);
   const [loadError, setLoadError] = useState("");
-  const [projectMenuOpen, setProjectMenuOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [view, setView] = useState<"dashboard" | "board" | "list" | "settings">("dashboard");
   const [collapsed, setCollapsed] = useState<Set<TaskStatus>>(() => new Set(["backlog", "done", "canceled"]));
@@ -153,6 +152,7 @@ export function AgentboardViewer() {
   }
 
   const activeProjects = projects.filter((project) => !project.archivedAt);
+  const navProjects = activeProjects.filter((project) => project.id !== "local" || project.issueCount > 0);
   const scopedTasks = tasks.filter((task) => activeProjects.some((project) => project.id === task.projectId) && (!projectId || task.projectId === projectId));
   const visibleTasks = scopedTasks.filter((task) => {
     if (projectId && task.projectId !== projectId) return false;
@@ -164,7 +164,7 @@ export function AgentboardViewer() {
     ...detail.activities.map((activity) => ({ id: activity.id, at: activity.createdAt, actor: activity.actorName, label: "操作", body: activitySummary(activity) })),
   ].sort((a, b) => Date.parse(a.at) - Date.parse(b.at)) : [];
 
-  const projectName = projectId ? activeProjects.find((project) => project.id === projectId)?.name ?? "项目" : "所有项目";
+  const projectName = projectId ? activeProjects.find((project) => project.id === projectId)?.name ?? "项目" : "全局";
   const presentations: Record<string, TaskCardPresentation> = Object.fromEntries(scopedTasks.map((task) => [task.id, { conversations: [], processing: { running: task.status === "in_progress" && Boolean(task.claimedBy), completed: null, total: null, startedAt: null }, unread: false }]));
   const currentUser: ActorIdentity = { type: "user", id: "user", name: "你", avatarUrl: null };
   const dashboardSummary = `当前项目共有 ${scopedTasks.length} 个议题，${scopedTasks.filter((task) => task.status === "done").length} 个已完成，${scopedTasks.filter((task) => task.status === "in_progress").length} 个处理中，${scopedTasks.filter((task) => task.status === "blocked").length} 个阻塞。`;
@@ -176,20 +176,19 @@ export function AgentboardViewer() {
     <div className="agentboard-card-footer"><span>{task.claimedBy ? `◉ ${task.claimedBy.name}` : "未认领"}</span>{task.priority !== "none" && <span>{task.priority}</span>}</div>
   </article>;
 
-  return <TaskboardLanguageProvider language="zh"><div className="app-shell agentboard-app"><main className="workspace">
-    <header className="workspace-header"><div className="workspace-title"><div className="workspace-kicker"><div className="header-project-switcher">
-      <button className="header-project-button" type="button" aria-expanded={projectMenuOpen} onClick={() => setProjectMenuOpen((open) => !open)}><span className="project-name">{projectName}</span><span aria-hidden="true">⌄</span></button>
-      {projectMenuOpen && <div className="header-project-menu agentboard-project-menu" role="menu" aria-label="项目"><span>切换项目</span><div className="project-menu-list">
-        <button type="button" role="menuitemradio" aria-checked={!projectId} onClick={() => { setProjectId(null); setProjectMenuOpen(false); }}>▱　所有项目</button>
-        {activeProjects.map((project) => <button type="button" role="menuitemradio" aria-checked={projectId === project.id} key={project.id} onClick={() => { setProjectId(project.id); setProjectMenuOpen(false); setView("dashboard"); }}>▱　{project.name}</button>)}
-      </div></div>}
-    </div></div></div><div className="workspace-drag-region" aria-hidden="true" /><div className="agentboard-header-note">TaskDock</div><button className="taskdock-header-action" type="button" onClick={() => setView("settings")}>设置</button><button className="taskdock-header-action" type="button" onClick={() => void logout()}>退出</button></header>
-    <div className="board-toolbar"><div className="view-tabs" aria-label="看板视图">
+  return <TaskboardLanguageProvider language="zh"><div className="app-shell agentboard-app">
+    <aside className="agentboard-sidebar"><div className="agentboard-sidebar-brand"><span className="agentboard-brand-mark">◈</span><strong>TaskDock</strong></div><nav aria-label="项目导航">
+      <button className={`agentboard-sidebar-item${!projectId && view !== "settings" ? " active" : ""}`} type="button" onClick={() => { setProjectId(null); setView("dashboard"); }}><span className="agentboard-nav-symbol">▦</span><span>全局</span><small>{tasks.length}</small></button>
+      <div className="agentboard-sidebar-label">项目</div>
+      {navProjects.map((project) => <button className={`agentboard-sidebar-item${projectId === project.id && view !== "settings" ? " active" : ""}`} type="button" key={project.id} onClick={() => { setProjectId(project.id); setView("dashboard"); }}><span className="agentboard-project-dot" /><span>{project.id === "local" ? "未分类任务" : project.name}</span><small>{project.issueCount}</small></button>)}
+      {navProjects.length === 0 && <p className="agentboard-sidebar-empty">暂无项目，可在设置中创建。</p>}
+    </nav></aside><main className="workspace">
+    <header className="workspace-header agentboard-workspace-header"><div className="agentboard-page-heading"><h1>{view === "settings" ? "管理设置" : projectId === "local" ? "未分类任务" : projectName}</h1>{view !== "settings" && <p>{projectId ? "查看该项目的任务和 Agent 进展" : "查看所有项目的任务和 Agent 进展"}</p>}</div><div className="workspace-drag-region" aria-hidden="true" /><button className={`taskdock-header-action${view === "settings" ? " active" : ""}`} type="button" onClick={() => setView("settings")}>设置</button><button className="taskdock-header-action" type="button" onClick={() => void logout()}>退出</button></header>
+    {view !== "settings" && <div className="board-toolbar"><div className="view-tabs" aria-label="看板视图">
       <button className={`view-tab${view === "dashboard" ? " active" : ""}`} type="button" onClick={() => setView("dashboard")}>仪表盘</button>
       <button className={`view-tab${view === "board" ? " active" : ""}`} type="button" onClick={() => setView("board")}>议题看板</button>
       <button className={`view-tab${view === "list" ? " active" : ""}`} type="button" onClick={() => setView("list")}>列表视图</button>
-      <button className={`view-tab${view === "settings" ? " active" : ""}`} type="button" onClick={() => setView("settings")}>管理设置</button>
-    </div><div className="toolbar-tools">{(view === "board" || view === "list") && <div className={`search-field${search ? " has-value" : ""}`}><span className="search-icon">⌕</span><input type="search" aria-label="搜索议题" placeholder="搜索议题…" value={search} onChange={(event) => setSearch(event.target.value)} /></div>}<button className="agentboard-refresh" type="button" onClick={() => void reload().catch((error: unknown) => setLoadError(error instanceof Error ? error.message : "刷新失败"))} aria-label="刷新">↻</button></div></div>
+    </div><div className="toolbar-tools">{(view === "board" || view === "list") && <div className={`search-field${search ? " has-value" : ""}`}><span className="search-icon">⌕</span><input type="search" aria-label="搜索议题" placeholder="搜索议题…" value={search} onChange={(event) => setSearch(event.target.value)} /></div>}<button className="agentboard-refresh" type="button" onClick={() => void reload().catch((error: unknown) => setLoadError(error instanceof Error ? error.message : "刷新失败"))} aria-label="刷新">↻</button></div></div>}
     {loadError && <div role="alert" className="agentboard-error">{loadError}</div>}
     {view === "dashboard" && <DashboardView projectId={projectId ?? "all"} projectCreatedAt={projectId ? projects.find((project) => project.id === projectId)?.createdAt ?? null : null} isAllProjects={!projectId} tasks={scopedTasks} presentations={presentations} currentUser={currentUser} animateSummary={false} onSummaryAnimationStart={() => undefined} onOpenTask={setSelectedTask} onOpenConversation={() => undefined} summaryOverride={dashboardSummary} taskdockMode />}
     {view === "settings" && <TaskdockSettings projects={projects} agents={agents} reload={reload} />}
