@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useState, type CSSProperties, type FormEvent } from "react";
 import {
   getAgentboardSession,
+  listTaskdockAgents,
+  loginTaskdockAdmin,
+  logoutTaskdock,
   listArtifacts,
   listComments,
   listProjects,
@@ -8,10 +11,14 @@ import {
   listTasks,
   loginAgentboard,
   resolveTaskboardUrl,
+  type TaskdockAgent,
 } from "./api";
-import { TASK_STATUSES, type Artifact, type Comment, type Project, type Task, type TaskChangeActivity, type TaskStatus } from "./types";
-import { taskStatusLabel } from "./i18n";
+import { TASK_STATUSES, type ActorIdentity, type Artifact, type Comment, type Project, type Task, type TaskChangeActivity, type TaskStatus } from "./types";
+import { TaskboardLanguageProvider, taskStatusLabel } from "./i18n";
 import { StatusIcon } from "./components/SemanticIcons";
+import { DashboardView } from "./components/DashboardView";
+import { TaskdockSettings } from "./TaskdockSettings";
+import type { TaskCardPresentation } from "./taskConversations";
 import "./AgentboardViewer.css";
 
 type Detail = { comments: Comment[]; activities: TaskChangeActivity[]; artifacts: Artifact[] };
@@ -42,11 +49,13 @@ function activitySummary(activity: TaskChangeActivity): string {
 }
 
 export function AgentboardViewer() {
-  const [session, setSession] = useState<"loading" | "guest" | "authenticated">("loading");
+  const [session, setSession] = useState<"loading" | "guest" | "viewer" | "admin">("loading");
+  const [loginMode, setLoginMode] = useState<"viewer" | "admin">("viewer");
   const [password, setPassword] = useState("");
   const [loginBusy, setLoginBusy] = useState(false);
   const [loginError, setLoginError] = useState("");
   const [projects, setProjects] = useState<Project[]>([]);
+  const [agents, setAgents] = useState<TaskdockAgent[]>([]);
   const [projectId, setProjectId] = useState<string | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
@@ -54,7 +63,7 @@ export function AgentboardViewer() {
   const [loadError, setLoadError] = useState("");
   const [projectMenuOpen, setProjectMenuOpen] = useState(false);
   const [search, setSearch] = useState("");
-  const [view, setView] = useState<"board" | "list">("board");
+  const [view, setView] = useState<"dashboard" | "board" | "list" | "settings">("dashboard");
   const [collapsed, setCollapsed] = useState<Set<TaskStatus>>(() => new Set(["backlog", "done", "canceled"]));
 
   useEffect(() => {
@@ -65,22 +74,24 @@ export function AgentboardViewer() {
   useEffect(() => {
     const controller = new AbortController();
     void getAgentboardSession(controller.signal).then(
-      (result) => setSession(result.authenticated ? "authenticated" : "guest"),
+      (result) => setSession(result.authenticated ? result.role ?? "viewer" : "guest"),
       () => setSession("guest"),
     );
     return () => controller.abort();
   }, []);
 
   const reload = useCallback(async () => {
-    const [nextProjects, nextTasks] = await Promise.all([listProjects(), listTasks()]);
+    const [nextProjects, nextTasks, nextAgents] = await Promise.all([listProjects(), listTasks(), session === "admin" ? listTaskdockAgents() : Promise.resolve([])]);
     setProjects(nextProjects);
     setTasks(nextTasks);
+    setAgents(nextAgents);
+    setProjectId((current) => current && nextProjects.find((project) => project.id === current && !project.archivedAt) ? current : null);
     setSelectedTask((current) => nextTasks.find((task) => task.id === current?.id) ?? null);
     setLoadError("");
-  }, []);
+  }, [session]);
 
   useEffect(() => {
-    if (session !== "authenticated") return;
+    if (session !== "viewer" && session !== "admin") return;
     void reload().catch((error: unknown) => setLoadError(error instanceof Error ? error.message : "无法读取看板"));
     const interval = window.setInterval(() => {
       void reload().catch((error: unknown) => setLoadError(error instanceof Error ? error.message : "无法读取看板"));
@@ -113,9 +124,10 @@ export function AgentboardViewer() {
     setLoginBusy(true);
     setLoginError("");
     try {
-      await loginAgentboard(password);
+      if (loginMode === "admin") await loginTaskdockAdmin(password);
+      else await loginAgentboard(password);
       setPassword("");
-      setSession("authenticated");
+      setSession(loginMode);
     } catch (error) {
       setLoginError(error instanceof Error ? error.message : "登录失败");
     } finally {
@@ -123,20 +135,30 @@ export function AgentboardViewer() {
     }
   }
 
-  if (session === "loading") return <div className="agentboard-login">正在连接 AgentBoard…</div>;
+  async function logout() {
+    await logoutTaskdock();
+    setSession("guest");
+    setView("dashboard");
+    setSelectedTask(null);
+  }
+
+  if (session === "loading") return <div className="agentboard-login">正在连接 TaskDock…</div>;
   if (session === "guest") {
     return <main className="agentboard-login"><form onSubmit={(event) => void submitLogin(event)}>
-      <div className="agentboard-brand">AgentBoard</div>
-      <h1>查看协作看板</h1>
-      <p>输入查看密码，了解 Agent 的任务进展和交付结果。</p>
-      <label htmlFor="agentboard-password">查看密码</label>
+      <div className="agentboard-brand">TaskDock</div>
+      <h1>{loginMode === "admin" ? "管理工作区" : "查看协作看板"}</h1>
+      <p>{loginMode === "admin" ? "使用管理员 Key 配置项目与 Agent 身份。" : "了解 Agent 的任务进展和交付结果。"}</p>
+      <div className="taskdock-login-modes"><button type="button" className={loginMode === "viewer" ? "active" : ""} onClick={() => { setLoginMode("viewer"); setLoginError(""); }}>查看</button><button type="button" className={loginMode === "admin" ? "active" : ""} onClick={() => { setLoginMode("admin"); setLoginError(""); }}>管理</button></div>
+      <label htmlFor="agentboard-password">{loginMode === "admin" ? "管理员 Key" : "查看密码"}</label>
       <input id="agentboard-password" type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} required />
       {loginError && <p role="alert" className="agentboard-error">{loginError}</p>}
       <button type="submit" disabled={loginBusy}>{loginBusy ? "登录中…" : "登录"}</button>
     </form></main>;
   }
 
-  const visibleTasks = tasks.filter((task) => {
+  const activeProjects = projects.filter((project) => !project.archivedAt);
+  const scopedTasks = tasks.filter((task) => activeProjects.some((project) => project.id === task.projectId) && (!projectId || task.projectId === projectId));
+  const visibleTasks = scopedTasks.filter((task) => {
     if (projectId && task.projectId !== projectId) return false;
     const needle = search.trim().toLocaleLowerCase();
     return !needle || `${task.identifier} ${task.title} ${task.description}`.toLocaleLowerCase().includes(needle);
@@ -146,7 +168,10 @@ export function AgentboardViewer() {
     ...detail.activities.map((activity) => ({ id: activity.id, at: activity.createdAt, actor: activity.actorName, label: "操作", body: activitySummary(activity) })),
   ].sort((a, b) => Date.parse(a.at) - Date.parse(b.at)) : [];
 
-  const projectName = projectId ? projects.find((project) => project.id === projectId)?.name ?? "项目" : "所有项目";
+  const projectName = projectId ? activeProjects.find((project) => project.id === projectId)?.name ?? "项目" : "所有项目";
+  const presentations: Record<string, TaskCardPresentation> = Object.fromEntries(scopedTasks.map((task) => [task.id, { conversations: [], processing: { running: task.status === "in_progress" && Boolean(task.claimedBy), completed: null, total: null, startedAt: null }, unread: false }]));
+  const currentUser: ActorIdentity = { type: "user", id: session, name: session === "admin" ? "管理员" : "你", avatarUrl: null };
+  const dashboardSummary = `当前项目共有 ${scopedTasks.length} 个议题，${scopedTasks.filter((task) => task.status === "done").length} 个已完成，${scopedTasks.filter((task) => task.status === "in_progress").length} 个处理中，${scopedTasks.filter((task) => task.status === "blocked").length} 个阻塞。`;
   const taskCard = (task: Task) => <article key={task.id} className={`task-card status-${task.status} agentboard-readonly-card${selectedTask?.id === task.id ? " selected" : ""}`}>
     <button className="task-card-open" type="button" aria-label={`打开 ${task.identifier}: ${task.title}`} onClick={() => setSelectedTask(task)} />
     <div className="card-topline"><span className="card-reference"><span className="task-identifier">ID: {task.identifier}</span></span></div>
@@ -155,22 +180,26 @@ export function AgentboardViewer() {
     <div className="agentboard-card-footer"><span>{task.claimedBy ? `◉ ${task.claimedBy.name}` : "未认领"}</span>{task.priority !== "none" && <span>{task.priority}</span>}</div>
   </article>;
 
-  return <div className="app-shell agentboard-app"><main className="workspace">
+  return <TaskboardLanguageProvider language="zh"><div className="app-shell agentboard-app"><main className="workspace">
     <header className="workspace-header"><div className="workspace-title"><div className="workspace-kicker"><div className="header-project-switcher">
       <button className="header-project-button" type="button" aria-expanded={projectMenuOpen} onClick={() => setProjectMenuOpen((open) => !open)}><span className="project-name">{projectName}</span><span aria-hidden="true">⌄</span></button>
       {projectMenuOpen && <div className="header-project-menu agentboard-project-menu" role="menu" aria-label="项目"><span>切换项目</span><div className="project-menu-list">
         <button type="button" role="menuitemradio" aria-checked={!projectId} onClick={() => { setProjectId(null); setProjectMenuOpen(false); }}>▱　所有项目</button>
-        {projects.map((project) => <button type="button" role="menuitemradio" aria-checked={projectId === project.id} key={project.id} onClick={() => { setProjectId(project.id); setProjectMenuOpen(false); }}>▱　{project.name}</button>)}
+        {activeProjects.map((project) => <button type="button" role="menuitemradio" aria-checked={projectId === project.id} key={project.id} onClick={() => { setProjectId(project.id); setProjectMenuOpen(false); setView("dashboard"); }}>▱　{project.name}</button>)}
       </div></div>}
-    </div></div></div><div className="workspace-drag-region" aria-hidden="true" /><div className="agentboard-header-note">AgentBoard · 只读</div></header>
+    </div></div></div><div className="workspace-drag-region" aria-hidden="true" /><div className="agentboard-header-note">TaskDock · {session === "admin" ? "管理" : "查看"}</div><button className="taskdock-header-action" type="button" onClick={() => { if (session === "admin") setView("settings"); else { void logout().then(() => setLoginMode("admin")); } }}>{session === "admin" ? "设置" : "管理登录"}</button><button className="taskdock-header-action" type="button" onClick={() => void logout()}>退出</button></header>
     <div className="board-toolbar"><div className="view-tabs" aria-label="看板视图">
+      <button className={`view-tab${view === "dashboard" ? " active" : ""}`} type="button" onClick={() => setView("dashboard")}>仪表盘</button>
       <button className={`view-tab${view === "board" ? " active" : ""}`} type="button" onClick={() => setView("board")}>议题看板</button>
       <button className={`view-tab${view === "list" ? " active" : ""}`} type="button" onClick={() => setView("list")}>列表视图</button>
-    </div><div className="toolbar-tools"><div className={`search-field${search ? " has-value" : ""}`}><span className="search-icon">⌕</span><input type="search" aria-label="搜索议题" placeholder="搜索议题…" value={search} onChange={(event) => setSearch(event.target.value)} /></div><button className="agentboard-refresh" type="button" onClick={() => void reload().catch((error: unknown) => setLoadError(error instanceof Error ? error.message : "刷新失败"))} aria-label="刷新">↻</button></div></div>
+      {session === "admin" && <button className={`view-tab${view === "settings" ? " active" : ""}`} type="button" onClick={() => setView("settings")}>管理设置</button>}
+    </div><div className="toolbar-tools">{(view === "board" || view === "list") && <div className={`search-field${search ? " has-value" : ""}`}><span className="search-icon">⌕</span><input type="search" aria-label="搜索议题" placeholder="搜索议题…" value={search} onChange={(event) => setSearch(event.target.value)} /></div>}<button className="agentboard-refresh" type="button" onClick={() => void reload().catch((error: unknown) => setLoadError(error instanceof Error ? error.message : "刷新失败"))} aria-label="刷新">↻</button></div></div>
     {loadError && <div role="alert" className="agentboard-error">{loadError}</div>}
+    {view === "dashboard" && <DashboardView projectId={projectId ?? "all"} projectCreatedAt={projectId ? projects.find((project) => project.id === projectId)?.createdAt ?? null : null} isAllProjects={!projectId} tasks={scopedTasks} presentations={presentations} currentUser={currentUser} animateSummary={false} onSummaryAnimationStart={() => undefined} onOpenTask={setSelectedTask} onOpenConversation={() => undefined} summaryOverride={dashboardSummary} taskdockMode />}
+    {view === "settings" && session === "admin" && <TaskdockSettings projects={projects} agents={agents} reload={reload} />}
     {view === "board" ? <div className="issue-board-layout agentboard-board-layout" style={{ "--main-column-count": statusOrder.length } as CSSProperties}><div className="board-scroll"><div className="board">
       {statusOrder.map((status: TaskStatus) => { const columnTasks = visibleTasks.filter((task) => task.status === status); return <section key={status} className={`board-column status-${status}`}><header className="column-header"><div className="column-heading"><span className="column-status-icon"><StatusIcon status={status} color="var(--column-status-color)" size={14} /></span><h2>{taskStatusLabel("zh", status)}{columnTasks.length ? ` ${columnTasks.length}` : ""}</h2></div></header><div className="column-list">{columnTasks.map(taskCard)}{columnTasks.length === 0 && <div className="column-empty">暂无议题</div>}</div></section>; })}
-    </div></div></div> : <div className="issue-list-view agentboard-list"><div className="issue-list-groups">{statusOrder.map((status) => { const groupTasks = visibleTasks.filter((task) => task.status === status); const isCollapsed = collapsed.has(status); return <section className={`issue-list-group status-${status}`} key={status}><button className="issue-list-group-header" type="button" aria-expanded={!isCollapsed} onClick={() => setCollapsed((current) => { const next = new Set(current); if (next.has(status)) next.delete(status); else next.add(status); return next; })}><span>{isCollapsed ? "›" : "⌄"}</span><span className="issue-list-status-icon"><StatusIcon status={status} color="currentColor" size={14} /></span><strong>{taskStatusLabel("zh", status)}</strong><span>{groupTasks.length}</span></button>{!isCollapsed && <div className="issue-list-rows">{groupTasks.map((task) => <button className="issue-list-row agentboard-list-row" type="button" key={task.id} onClick={() => setSelectedTask(task)}><span className="issue-list-title-cell"><small>{task.identifier}</small><strong>{task.title}</strong></span><span className="agentboard-list-agent">{task.claimedBy?.name ?? "未认领"}</span><time dateTime={task.updatedAt}>{date(task.updatedAt)}</time></button>)}{groupTasks.length === 0 && <div className="issue-list-empty">暂无议题</div>}</div>}</section>; })}</div></div>}
+    </div></div></div> : view === "list" ? <div className="issue-list-view agentboard-list"><div className="issue-list-groups">{statusOrder.map((status) => { const groupTasks = visibleTasks.filter((task) => task.status === status); const isCollapsed = collapsed.has(status); return <section className={`issue-list-group status-${status}`} key={status}><button className="issue-list-group-header" type="button" aria-expanded={!isCollapsed} onClick={() => setCollapsed((current) => { const next = new Set(current); if (next.has(status)) next.delete(status); else next.add(status); return next; })}><span>{isCollapsed ? "›" : "⌄"}</span><span className="issue-list-status-icon"><StatusIcon status={status} color="currentColor" size={14} /></span><strong>{taskStatusLabel("zh", status)}</strong><span>{groupTasks.length}</span></button>{!isCollapsed && <div className="issue-list-rows">{groupTasks.map((task) => <button className="issue-list-row agentboard-list-row" type="button" key={task.id} onClick={() => setSelectedTask(task)}><span className="issue-list-title-cell"><small>{task.identifier}</small><strong>{task.title}</strong></span><span className="agentboard-list-agent">{task.claimedBy?.name ?? "未认领"}</span><time dateTime={task.updatedAt}>{date(task.updatedAt)}</time></button>)}{groupTasks.length === 0 && <div className="issue-list-empty">暂无议题</div>}</div>}</section>; })}</div></div> : null}
   </main>
     {selectedTask && <div className="agentboard-detail-backdrop" onClick={() => setSelectedTask(null)}><aside className="agentboard-detail" onClick={(event) => event.stopPropagation()} aria-label="任务详情">
       <div className="agentboard-detail-head"><span>{selectedTask.identifier}</span><button type="button" onClick={() => setSelectedTask(null)} aria-label="关闭详情">×</button></div>
@@ -182,5 +211,5 @@ export function AgentboardViewer() {
       })}</section>
       <section><h3>操作历史与评论</h3>{!detail ? <p>加载中…</p> : timeline.length === 0 ? <p>暂无记录</p> : timeline.map((item) => <article className="agentboard-event" key={`${item.label}-${item.id}`}><small>{date(item.at)}</small><div><strong>{item.actor}</strong> · {item.label}</div><p className="agentboard-body">{item.body}</p></article>)}</section>
     </aside></div>}
-  </div>;
+  </div></TaskboardLanguageProvider>;
 }

@@ -348,6 +348,7 @@ export interface Project {
   issueCount: number;
   createdAt: string;
   updatedAt: string;
+  archivedAt?: string | null;
 }
 
 export interface ProjectSummary {

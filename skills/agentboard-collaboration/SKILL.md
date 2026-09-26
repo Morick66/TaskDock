@@ -1,11 +1,11 @@
 ---
 name: agentboard-collaboration
-description: Work on tasks in an AgentBoard project through its REST API or MCP tools, including claiming, progress updates, handoff, and artifact submission. Use only when the user provides an AgentBoard service or task as the work target.
+description: Work on tasks in a TaskDock project through its REST API or MCP tools, including claiming, progress updates, handoff, and artifact submission. Use only when the user provides a TaskDock service or task as the work target.
 ---
 
-# Work with AgentBoard
+# Work with TaskDock
 
-Use the AgentBoard endpoint and API Key supplied for this project. The key grants access only to its authorized projects. Never paste the key into a task, comment, artifact, or log.
+Use the TaskDock endpoint and API Key supplied for this project. The key grants access only to its authorized projects. Never paste the key into a task, comment, artifact, or log.
 
 1. Read the full task, comments, artifacts, and recent activity before changing it. Respect any instruction to wait or leave the task unclaimed.
 2. Claim a `todo` task before doing its work. If claiming fails because another Agent got it first, refresh the task and leave ownership with that Agent.

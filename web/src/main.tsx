@@ -8,7 +8,7 @@ import "./styles.css";
 
 async function main() {
   const mode = await getTaskboardMetadata().then((metadata) => metadata.mode, () => undefined);
-  if (mode === "agentboard") document.title = "AgentBoard";
+  if (mode === "agentboard") document.title = "TaskDock";
   else await initializeTaskboardStorage();
   createRoot(document.getElementById("root")!).render(
     <StrictMode>

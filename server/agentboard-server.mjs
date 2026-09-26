@@ -70,6 +70,7 @@ export function createAgentBoardServer(options = {}) {
     CREATE TABLE IF NOT EXISTS agentboard_agent_projects (agent_id TEXT NOT NULL REFERENCES agentboard_agents(id), project_id TEXT NOT NULL REFERENCES projects(id), PRIMARY KEY(agent_id, project_id));
     CREATE TABLE IF NOT EXISTS agentboard_keys (id TEXT PRIMARY KEY, agent_id TEXT NOT NULL REFERENCES agentboard_agents(id), key_hash TEXT NOT NULL UNIQUE, revoked_at TEXT, created_at TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS agentboard_claims (task_id TEXT PRIMARY KEY REFERENCES tasks(id) ON DELETE CASCADE, agent_id TEXT NOT NULL REFERENCES agentboard_agents(id), claimed_at TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS agentboard_project_archives (project_id TEXT PRIMARY KEY REFERENCES projects(id) ON DELETE CASCADE, archived_at TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS agentboard_artifacts (id TEXT PRIMARY KEY, task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE, agent_id TEXT NOT NULL REFERENCES agentboard_agents(id), agent_name TEXT NOT NULL, type TEXT NOT NULL, title TEXT NOT NULL, content TEXT, url TEXT, attachment_id TEXT REFERENCES attachments(id), created_at TEXT NOT NULL);
     CREATE INDEX IF NOT EXISTS agentboard_artifacts_task ON agentboard_artifacts(task_id, created_at);
   `);
@@ -83,9 +84,13 @@ export function createAgentBoardServer(options = {}) {
     }
     const cookie = /(?:^|;\s*)agentboard_session=([^;]+)/.exec(request.headers.cookie ?? "")?.[1];
     if (cookie) {
-      const [expiry, proof] = cookie.split(".");
-      if (/^\d+$/.test(expiry) && proof && Number(expiry) > Date.now() && safeEqual(proof, hash(`${expiry}:${sessionSecret}`))) {
-        return { role: "viewer", id: "viewer", name: "Viewer" };
+      const [first, second, third] = cookie.split(".");
+      const role = third ? first : "viewer";
+      const expiry = third ? second : first;
+      const proof = third ?? second;
+      const expected = third ? hash(`${role}:${expiry}:${sessionSecret}`) : hash(`${expiry}:${sessionSecret}`);
+      if ((role === "viewer" || role === "admin") && /^\d+$/.test(expiry) && proof && Number(expiry) > Date.now() && safeEqual(proof, expected)) {
+        return { role, id: role, name: role === "admin" ? "Administrator" : "Viewer" };
       }
     }
     throw new ApiError(401, "UNAUTHORIZED", "Authentication required");
@@ -101,6 +106,29 @@ export function createAgentBoardServer(options = {}) {
   }
   function admin(principal) {
     if (principal.role !== "admin") throw new ApiError(403, "ADMIN_REQUIRED", "Administrator key required");
+  }
+  function sessionCookie(request, role) {
+    const expiry = String(Date.now() + 24 * 60 * 60 * 1000);
+    const secure = request.socket.encrypted || request.headers["x-forwarded-proto"] === "https" ? "; Secure" : "";
+    return `agentboard_session=${role}.${expiry}.${hash(`${role}:${expiry}:${sessionSecret}`)}; HttpOnly; SameSite=Strict; Path=/; Max-Age=86400${secure}`;
+  }
+  function projectArchived(projectId) {
+    return Boolean(sql.prepare("SELECT 1 FROM agentboard_project_archives WHERE project_id = ?").get(projectId));
+  }
+  function activeProject(projectId) {
+    if (!db.getProject(projectId)) throw new ApiError(404, "PROJECT_NOT_FOUND", "Project not found");
+    if (projectArchived(projectId)) throw new ApiError(409, "PROJECT_ARCHIVED", "Restore the project before changing its tasks or grants");
+  }
+  function projectInfo(project) {
+    const row = sql.prepare("SELECT archived_at FROM agentboard_project_archives WHERE project_id = ?").get(project.id);
+    return { ...project, archivedAt: row?.archived_at ?? null };
+  }
+  function agentInfo(agentId) {
+    const row = sql.prepare("SELECT id, name, created_at FROM agentboard_agents WHERE id = ?").get(agentId);
+    if (!row) throw new ApiError(404, "AGENT_NOT_FOUND", "Agent not found");
+    const projectIds = sql.prepare("SELECT project_id FROM agentboard_agent_projects WHERE agent_id = ? ORDER BY project_id").all(agentId).map((grant) => grant.project_id);
+    const keys = sql.prepare("SELECT id, created_at, revoked_at FROM agentboard_keys WHERE agent_id = ? ORDER BY created_at DESC").all(agentId).map((key) => ({ id: key.id, createdAt: key.created_at, revokedAt: key.revoked_at }));
+    return { id: row.id, name: row.name, createdAt: row.created_at, projectIds, keys };
   }
   function taskFor(principal, id) {
     const task = db.getTask(id);
@@ -119,6 +147,7 @@ export function createAgentBoardServer(options = {}) {
   }
   function transition(principal, task, action, version) {
     writable(principal);
+    activeProject(task.projectId);
     if (action === "claim" && principal.role !== "agent") throw new ApiError(403, "AGENT_REQUIRED", "Only an Agent can claim tasks");
     if (!Number.isSafeInteger(version) || version < 1) throw new ApiError(400, "INVALID_VERSION", "Current task version is required");
     const current = taskFor(principal, task.id);
@@ -141,6 +170,7 @@ export function createAgentBoardServer(options = {}) {
   }
   function submitArtifact(principal, task, input) {
     writable(principal); owner(principal, task);
+    activeProject(task.projectId);
     const type = requiredString(input.type, "type", 40);
     const title = requiredString(input.title, "title");
     const content = input.content == null ? null : requiredString(input.content, "content", 100_000);
@@ -162,7 +192,7 @@ export function createAgentBoardServer(options = {}) {
     if (name === "list_tasks") {
       const filters = { projectId: args.projectId, status: args.status, archived: "false" };
       if (filters.projectId) scope(principal, filters.projectId);
-      const tasks = db.listTasks(filters).filter((task) => principal.role !== "agent" || sql.prepare("SELECT 1 FROM agentboard_agent_projects WHERE agent_id = ? AND project_id = ?").get(principal.id, task.projectId));
+      const tasks = db.listTasks(filters).filter((task) => (principal.role === "admin" || !projectArchived(task.projectId)) && (principal.role !== "agent" || sql.prepare("SELECT 1 FROM agentboard_agent_projects WHERE agent_id = ? AND project_id = ?").get(principal.id, task.projectId)));
       return { tasks: tasks.map((task) => taskFor(principal, task.id)) };
     }
     if (name === "get_task") return { task: taskFor(principal, args.taskId) };
@@ -170,6 +200,7 @@ export function createAgentBoardServer(options = {}) {
     if (name === "claim_task" || name === "release_task") return { task: transition(principal, task, name === "claim_task" ? "claim" : "release", args.version) };
     if (name === "update_task") {
       writable(principal); owner(principal, task);
+      activeProject(task.projectId);
       const { taskId: _taskId, ...patch } = args;
       const { version, changes, assigneeTarget, threadId, threadBinding, agentSession } = parseTaskPatch(patch, () => null);
       if (assigneeTarget !== undefined || threadId || threadBinding || agentSession || changes.projectId) throw new ApiError(400, "INVALID_FIELD", "AgentBoard task updates cannot change identity, project or session fields");
@@ -177,6 +208,7 @@ export function createAgentBoardServer(options = {}) {
     }
     if (name === "add_comment") {
       writable(principal);
+      activeProject(task.projectId);
       const comment = db.createComment(task.id, { body: requiredString(args.body, "body", 100_000), actor: actor(principal) });
       return { comment };
     }
@@ -188,7 +220,7 @@ export function createAgentBoardServer(options = {}) {
     const url = new URL(request.url, "http://localhost");
     const pathname = url.pathname;
     if (pathname === "/health") return json(response, 200, { status: "ok" });
-    if (pathname === "/api/meta" && request.method === "GET") return json(response, 200, { mode: "agentboard", realtime: { transport: "poll", intervalMs: 3000 }, capabilities: { localAiChat: false } });
+    if (pathname === "/api/meta" && request.method === "GET") return json(response, 200, { mode: "agentboard", productName: "TaskDock", realtime: { transport: "poll", intervalMs: 3000 }, capabilities: { localAiChat: false } });
     if (request.method === "GET" && !pathname.startsWith("/api/") && pathname !== "/mcp") {
       let target = path.resolve(staticDir, `.${pathname}`);
       if (!target.startsWith(`${staticDir}${path.sep}`) && target !== staticDir) throw new ApiError(404, "NOT_FOUND", "Not found");
@@ -201,17 +233,26 @@ export function createAgentBoardServer(options = {}) {
     if (pathname === "/api/agentboard/login" && request.method === "POST") {
       const input = await body(request);
       if (!safeEqual(String(input.password ?? ""), viewerPassword)) throw new ApiError(401, "INVALID_LOGIN", "Invalid viewer password");
-      const expiry = String(Date.now() + 24 * 60 * 60 * 1000);
-      const secure = request.socket.encrypted || request.headers["x-forwarded-proto"] === "https" ? "; Secure" : "";
-      return json(response, 200, { authenticated: true, viewer: true }, { "set-cookie": `agentboard_session=${expiry}.${hash(`${expiry}:${sessionSecret}`)}; HttpOnly; SameSite=Strict; Path=/; Max-Age=86400${secure}` });
+      return json(response, 200, { authenticated: true, role: "viewer" }, { "set-cookie": sessionCookie(request, "viewer") });
+    }
+    if (pathname === "/api/agentboard/admin/login" && request.method === "POST") {
+      const input = await body(request);
+      if (!safeEqual(String(input.key ?? ""), adminKey)) throw new ApiError(401, "INVALID_LOGIN", "Invalid administrator key");
+      return json(response, 200, { authenticated: true, role: "admin" }, { "set-cookie": sessionCookie(request, "admin") });
+    }
+    if (pathname === "/api/agentboard/logout" && request.method === "POST") {
+      return json(response, 200, { authenticated: false }, { "set-cookie": "agentboard_session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0" });
     }
     if (pathname === "/api/agentboard/session" && request.method === "GET") {
-      try { const session = authenticate(request); return json(response, 200, { authenticated: true, viewer: session.role === "viewer" }); }
+      try { const session = authenticate(request); return json(response, 200, { authenticated: true, role: session.role, viewer: session.role === "viewer" }); }
       catch { return json(response, 200, { authenticated: false, viewer: false }); }
     }
     const principal = authenticate(request);
-    if (pathname === "/api/agentboard/session" && request.method === "GET") return json(response, 200, { authenticated: true, viewer: principal.role === "viewer" });
     if (pathname === "/api/revisions" && request.method === "GET") return json(response, 200, { changed: true, revision: Date.now() });
+    if (pathname === "/api/agents" && request.method === "GET") {
+      admin(principal);
+      return json(response, 200, { agents: sql.prepare("SELECT id FROM agentboard_agents ORDER BY created_at, id").all().map((row) => agentInfo(row.id)) });
+    }
     if (pathname === "/api/agents" && request.method === "POST") {
       admin(principal); const input = await body(request);
       const id = requiredString(input.id, "id", 96); const name = requiredString(input.name, "name", 120);
@@ -221,10 +262,27 @@ export function createAgentBoardServer(options = {}) {
       sql.exec("BEGIN IMMEDIATE");
       try {
         sql.prepare("INSERT INTO agentboard_agents (id, name, created_at) VALUES (?, ?, ?)").run(id, name, new Date().toISOString());
-        for (const projectId of new Set(projectIds)) sql.prepare("INSERT INTO agentboard_agent_projects (agent_id, project_id) VALUES (?, ?)").run(id, validateProjectId(projectId));
+        for (const projectId of new Set(projectIds)) { const project = validateProjectId(projectId); activeProject(project); sql.prepare("INSERT INTO agentboard_agent_projects (agent_id, project_id) VALUES (?, ?)").run(id, project); }
         sql.exec("COMMIT");
       } catch (error) { sql.exec("ROLLBACK"); throw error; }
-      return json(response, 201, { agent: { id, name, projectIds } });
+      return json(response, 201, { agent: agentInfo(id) });
+    }
+    const agentRoute = /^\/api\/agents\/([^/]+)$/.exec(pathname);
+    if (agentRoute && request.method === "PATCH") {
+      admin(principal); const id = decodeURIComponent(agentRoute[1]);
+      agentInfo(id);
+      const input = await body(request);
+      const name = requiredString(input.name, "name", 120);
+      const projectIds = input.projectIds;
+      if (!Array.isArray(projectIds) || projectIds.length === 0) throw new ApiError(400, "INVALID_FIELD", "projectIds must be nonempty");
+      sql.exec("BEGIN IMMEDIATE");
+      try {
+        sql.prepare("UPDATE agentboard_agents SET name = ? WHERE id = ?").run(name, id);
+        sql.prepare("DELETE FROM agentboard_agent_projects WHERE agent_id = ?").run(id);
+        for (const projectId of new Set(projectIds)) { const project = validateProjectId(projectId); activeProject(project); sql.prepare("INSERT INTO agentboard_agent_projects (agent_id, project_id) VALUES (?, ?)").run(id, project); }
+        sql.exec("COMMIT");
+      } catch (error) { sql.exec("ROLLBACK"); throw error; }
+      return json(response, 200, { agent: agentInfo(id) });
     }
     const keyRoute = /^\/api\/agents\/([^/]+)\/keys(?:\/([^/]+))?$/.exec(pathname);
     if (keyRoute) {
@@ -242,12 +300,38 @@ export function createAgentBoardServer(options = {}) {
       }
     }
     if (pathname === "/api/projects" && request.method === "GET") {
-      const projects = db.listProjects().filter((p) => principal.role !== "agent" || sql.prepare("SELECT 1 FROM agentboard_agent_projects WHERE agent_id = ? AND project_id = ?").get(principal.id, p.id));
+      const projects = db.listProjects().filter((p) => (principal.role === "admin" || !projectArchived(p.id)) && (principal.role !== "agent" || sql.prepare("SELECT 1 FROM agentboard_agent_projects WHERE agent_id = ? AND project_id = ?").get(principal.id, p.id))).map(projectInfo);
       return json(response, 200, { projects });
     }
     if (pathname === "/api/projects" && request.method === "POST") {
       admin(principal); const input = await body(request);
-      return json(response, 201, { project: db.createProject({ id: validateProjectId(input.id), name: requiredString(input.name, "name"), workspacePath: null }) });
+      return json(response, 201, { project: projectInfo(db.createProject({ id: validateProjectId(input.id), name: requiredString(input.name, "name"), workspacePath: null })) });
+    }
+    const projectRoute = /^\/api\/projects\/([^/]+)(?:\/(archive|restore))?$/.exec(pathname);
+    if (projectRoute) {
+      admin(principal); const id = decodeURIComponent(projectRoute[1]);
+      if (id === "local") throw new ApiError(403, "SYSTEM_PROJECT", "The global project cannot be archived or deleted");
+      const project = db.getProject(id);
+      if (!project) throw new ApiError(404, "PROJECT_NOT_FOUND", "Project not found");
+      if (request.method === "POST" && projectRoute[2] === "archive") {
+        sql.prepare("INSERT INTO agentboard_project_archives (project_id, archived_at) VALUES (?, ?) ON CONFLICT(project_id) DO NOTHING").run(id, new Date().toISOString());
+        return json(response, 200, { project: projectInfo(project) });
+      }
+      if (request.method === "POST" && projectRoute[2] === "restore") {
+        sql.prepare("DELETE FROM agentboard_project_archives WHERE project_id = ?").run(id);
+        return json(response, 200, { project: projectInfo(project) });
+      }
+      if (request.method === "DELETE" && !projectRoute[2]) {
+        const issueCount = sql.prepare("SELECT COUNT(*) AS count FROM tasks WHERE project_id = ?").get(id).count;
+        if (issueCount) throw new ApiError(409, "PROJECT_NOT_EMPTY", "Archive projects that still contain tasks");
+        sql.exec("BEGIN IMMEDIATE");
+        try {
+          sql.prepare("DELETE FROM agentboard_agent_projects WHERE project_id = ?").run(id);
+          sql.prepare("DELETE FROM projects WHERE id = ?").run(id);
+          sql.exec("COMMIT");
+        } catch (error) { sql.exec("ROLLBACK"); throw error; }
+        response.writeHead(204); return response.end();
+      }
     }
     if (pathname === "/api/tasks" && request.method === "GET") {
       const filters = parseTaskFilters(url.searchParams);
@@ -257,6 +341,7 @@ export function createAgentBoardServer(options = {}) {
       writable(principal); const input = await body(request);
       const parsed = parseTaskCreate({ status: "todo", ...input }, () => null);
       scope(principal, parsed.projectId);
+      activeProject(parsed.projectId);
       if (parsed.assigneeTarget || parsed.threadId || parsed.threadBinding || parsed.agentSession) throw new ApiError(400, "INVALID_FIELD", "AgentBoard does not accept client identity fields");
       return json(response, 201, { task: taskFor(principal, db.createTask({ ...parsed, actor: actor(principal), assignee: actor(principal) }).id) });
     }
@@ -274,6 +359,7 @@ export function createAgentBoardServer(options = {}) {
       if (action === "attachments" && request.method === "GET") return json(response, 200, { attachments: db.listAttachments(task.id) });
       if (action === "attachments" && request.method === "POST") {
         writable(principal); owner(principal, task);
+        activeProject(task.projectId);
         let filename;
         try { filename = decodeURIComponent(requiredString(request.headers["x-taskboard-filename"], "filename", 512)); }
         catch { throw new ApiError(400, "INVALID_FILENAME", "Invalid encoded filename"); }
@@ -307,7 +393,7 @@ export function createAgentBoardServer(options = {}) {
     }
     if (pathname === "/mcp" && request.method === "POST") {
       writable(principal); const rpc = await body(request);
-      if (rpc.method === "initialize") return json(response, 200, { jsonrpc: "2.0", id: rpc.id, result: { protocolVersion: rpc.params?.protocolVersion ?? "2025-11-25", capabilities: { tools: {} }, serverInfo: { name: "AgentBoard", version: "1.0.0" } } });
+      if (rpc.method === "initialize") return json(response, 200, { jsonrpc: "2.0", id: rpc.id, result: { protocolVersion: rpc.params?.protocolVersion ?? "2025-11-25", capabilities: { tools: {} }, serverInfo: { name: "TaskDock", version: "1.0.0" } } });
       if (rpc.method === "notifications/initialized") { response.writeHead(202); return response.end(); }
       if (rpc.method === "tools/list") return json(response, 200, { jsonrpc: "2.0", id: rpc.id, result: { tools: [
         ["list_tasks", "List tasks in an authorized project", { projectId: { type: "string" }, status: { type: "string" } }, []],
