@@ -136,9 +136,12 @@ export function createTaskDockServer(options = {}) {
       throw new ApiError(409, "TASK_NOT_CLAIMABLE", "Task must be an unclaimed, active todo");
     }
     if (action === "release" && !current.claimedBy) throw new ApiError(409, "TASK_NOT_CLAIMED", "Task is not claimed");
+    if (action === "release" && principal.role === "agent" && current.claimedBy.id !== principal.id) {
+      throw new ApiError(403, "CLAIM_NOT_OWNED", "Only the claiming Agent can release this task");
+    }
     sql.exec("BEGIN IMMEDIATE");
     try {
-      const nextStatus = action === "claim" ? "in_progress" : "todo";
+      const nextStatus = action === "claim" ? "in_progress" : current.status === "done" ? "done" : "todo";
       const updated = sql.prepare("UPDATE tasks SET status = ?, version = version + 1, updated_at = ? WHERE id = ? AND version = ?").run(nextStatus, new Date().toISOString(), current.id, version);
       if (updated.changes !== 1) throw new ApiError(409, "VERSION_CONFLICT", "Task version changed");
       if (action === "claim") sql.prepare("INSERT INTO agentboard_claims (task_id, agent_id, claimed_at) VALUES (?, ?, ?)").run(current.id, principal.id, new Date().toISOString());
@@ -178,6 +181,9 @@ export function createTaskDockServer(options = {}) {
     if (name === "claim_task" || name === "release_task") return { task: transition(principal, task, name === "claim_task" ? "claim" : "release", args.version) };
     if (name === "update_task") {
       activeProject(task.projectId);
+      if (principal.role === "agent" && task.claimedBy?.id !== principal.id) {
+        throw new ApiError(403, "CLAIM_NOT_OWNED", "Only the claiming Agent can update this task");
+      }
       const { taskId: _taskId, ...patch } = args;
       const { version, changes, assigneeTarget, threadId, threadBinding, agentSession } = parseTaskPatch(patch, () => null);
       if (assigneeTarget !== undefined || threadId || threadBinding || agentSession || changes.projectId) throw new ApiError(400, "INVALID_FIELD", "AgentBoard task updates cannot change identity, project or session fields");
