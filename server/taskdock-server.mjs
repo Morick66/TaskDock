@@ -52,15 +52,15 @@ function artifactFromRow(row) {
     attachmentId: row.attachment_id, agentId: row.agent_id, agentName: row.agent_name, createdAt: row.created_at };
 }
 
-export function createAgentBoardServer(options = {}) {
+export function createTaskDockServer(options = {}) {
   const env = options.env ?? process.env;
-  const dataDir = path.resolve(options.dataDirectory ?? env.AGENTBOARD_DATA_DIR ?? path.join(ROOT, ".data"));
+  const dataDir = path.resolve(options.dataDirectory ?? env.TASKDOCK_DATA_DIR ?? path.join(ROOT, ".data"));
   const staticDir = path.resolve(options.staticDirectory ?? path.join(ROOT, "dist", "web"));
   const attachmentsDir = path.join(dataDir, "attachments");
-  const adminKey = options.adminKey ?? env.AGENTBOARD_ADMIN_KEY;
-  const sessionSecret = options.sessionSecret ?? env.AGENTBOARD_SESSION_SECRET;
+  const adminKey = options.adminKey ?? env.TASKDOCK_USER_KEY;
+  const sessionSecret = options.sessionSecret ?? env.TASKDOCK_SESSION_SECRET;
   if (!adminKey || !sessionSecret) {
-    throw new Error("AGENTBOARD_ADMIN_KEY and AGENTBOARD_SESSION_SECRET are required");
+    throw new Error("TASKDOCK_USER_KEY and TASKDOCK_SESSION_SECRET are required");
   }
   const db = new TaskboardDatabase(path.join(dataDir, "taskboard.sqlite"));
   const sql = db.database;
@@ -429,8 +429,8 @@ export function createAgentBoardServer(options = {}) {
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const app = createAgentBoardServer();
-  app.listen({ host: process.env.AGENTBOARD_HOST ?? "0.0.0.0", port: Number(process.env.AGENTBOARD_PORT ?? 47823) })
-    .then((address) => console.log(`AgentBoard listening on ${address.address}:${address.port}`))
+  const app = createTaskDockServer();
+  app.listen({ host: process.env.TASKDOCK_HOST ?? "0.0.0.0", port: Number(process.env.TASKDOCK_PORT ?? 47823) })
+    .then((address) => console.log(`TaskDock listening on ${address.address}:${address.port}`))
     .catch((error) => { console.error(error); process.exitCode = 1; });
 }

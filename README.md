@@ -8,7 +8,7 @@ A local-first issue board that runs in a browser and can be embedded in Codex th
 
 ## TaskDock service
 
-TaskDock's standalone API, Web dashboards and management settings, and Docker deployment are documented in [TaskDock deployment](docs/agentboard-deployment.md). The existing Codex Taskboard launcher and CLI instructions below describe the original local product.
+TaskDock's standalone API, Web dashboards and management settings, and Docker deployment are documented in [TaskDock deployment](docs/taskdock-deployment.md). The existing Codex Taskboard launcher and CLI instructions below describe the original local product.
 
 ## Requirements
 
