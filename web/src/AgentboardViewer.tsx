@@ -16,6 +16,7 @@ import { TASK_STATUSES, type ActorIdentity, type Artifact, type Comment, type Pr
 import { TaskboardLanguageProvider, taskStatusLabel } from "./i18n";
 import { StatusIcon } from "./components/SemanticIcons";
 import { DashboardView } from "./components/DashboardView";
+import { ProjectReadmeView } from "./components/ProjectReadmeView";
 import { TaskdockSettings } from "./TaskdockSettings";
 import type { TaskCardPresentation } from "./taskConversations";
 import "./AgentboardViewer.css";
@@ -60,7 +61,8 @@ export function AgentboardViewer() {
   const [detail, setDetail] = useState<Detail | null>(null);
   const [loadError, setLoadError] = useState("");
   const [search, setSearch] = useState("");
-  const [view, setView] = useState<"dashboard" | "board" | "list" | "settings">("dashboard");
+  const [view, setView] = useState<"dashboard" | "board" | "list" | "readme" | "settings">("dashboard");
+  const [readmeRevision, setReadmeRevision] = useState(0);
   const [collapsed, setCollapsed] = useState<Set<TaskStatus>>(() => new Set(["backlog", "done", "canceled"]));
 
   useEffect(() => {
@@ -82,6 +84,7 @@ export function AgentboardViewer() {
     setProjects(nextProjects);
     setTasks(nextTasks);
     setAgents(nextAgents);
+    setReadmeRevision((current) => current + 1);
     setProjectId((current) => current && nextProjects.find((project) => project.id === current && !project.archivedAt) ? current : null);
     setSelectedTask((current) => nextTasks.find((task) => task.id === current?.id) ?? null);
     setLoadError("");
@@ -188,9 +191,19 @@ export function AgentboardViewer() {
       <button className={`view-tab${view === "dashboard" ? " active" : ""}`} type="button" onClick={() => setView("dashboard")}>仪表盘</button>
       <button className={`view-tab${view === "board" ? " active" : ""}`} type="button" onClick={() => setView("board")}>议题看板</button>
       <button className={`view-tab${view === "list" ? " active" : ""}`} type="button" onClick={() => setView("list")}>列表视图</button>
+      {projectId && projectId !== "local" && <button className={`view-tab${view === "readme" ? " active" : ""}`} type="button" onClick={() => setView("readme")}>项目文档</button>}
     </div><div className="toolbar-tools">{(view === "board" || view === "list") && <div className={`search-field${search ? " has-value" : ""}`}><span className="search-icon">⌕</span><input type="search" aria-label="搜索议题" placeholder="搜索议题…" value={search} onChange={(event) => setSearch(event.target.value)} /></div>}<button className="agentboard-refresh" type="button" onClick={() => void reload().catch((error: unknown) => setLoadError(error instanceof Error ? error.message : "刷新失败"))} aria-label="刷新">↻</button></div></div>}
     {loadError && <div role="alert" className="agentboard-error">{loadError}</div>}
     {view === "dashboard" && <DashboardView projectId={projectId ?? "all"} projectCreatedAt={projectId ? projects.find((project) => project.id === projectId)?.createdAt ?? null : null} isAllProjects={!projectId} tasks={scopedTasks} presentations={presentations} currentUser={currentUser} animateSummary={false} onSummaryAnimationStart={() => undefined} onOpenTask={setSelectedTask} onOpenConversation={() => undefined} summaryOverride={dashboardSummary} taskdockMode />}
+    {view === "readme" && projectId && projects.find((project) => project.id === projectId) && <ProjectReadmeView
+      key={projectId}
+      project={projects.find((project) => project.id === projectId)!}
+      tasks={scopedTasks}
+      referenceTasks={scopedTasks}
+      revision={readmeRevision}
+      onOpenTask={(reference) => setSelectedTask(tasks.find((task) => task.id === reference.id) ?? null)}
+      onError={(error) => setLoadError(typeof error === "string" ? error : error?.[0] ?? "")}
+    />}
     {view === "settings" && <TaskdockSettings projects={projects} agents={agents} reload={reload} />}
     {view === "board" ? <div className="issue-board-layout agentboard-board-layout" style={{ "--main-column-count": statusOrder.length } as CSSProperties}><div className="board-scroll"><div className="board">
       {statusOrder.map((status: TaskStatus) => { const columnTasks = visibleTasks.filter((task) => task.status === status); return <section key={status} className={`board-column status-${status}`}><header className="column-header"><div className="column-heading"><span className="column-status-icon"><StatusIcon status={status} color="var(--column-status-color)" size={14} /></span><h2>{taskStatusLabel("zh", status)}{columnTasks.length ? ` ${columnTasks.length}` : ""}</h2></div></header><div className="column-list">{columnTasks.map(taskCard)}{columnTasks.length === 0 && <div className="column-empty">暂无议题</div>}</div></section>; })}

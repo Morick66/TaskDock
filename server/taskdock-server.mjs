@@ -6,7 +6,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { TaskboardDatabase } from "./database.mjs";
 import { ApiError, validateProjectId } from "../shared/api-fields.mjs";
-import { parseTaskCreate, parseTaskPatch, parseTaskFilters } from "../shared/task-input.mjs";
+import { parseTaskCreate, parseTaskPatch, parseTaskFilters, parseProjectReadmeSave } from "../shared/task-input.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const MAX_BODY = 1024 * 1024;
@@ -299,6 +299,37 @@ export function createTaskDockServer(options = {}) {
       const input = await body(request);
       return json(response, 201, { project: projectInfo(db.createProject({ id: validateProjectId(input.id), name: requiredString(input.name, "name"), workspacePath: null })) });
     }
+    const readmeRoute = /^\/api\/projects\/([^/]+)\/readme(?:\/(attachments))?$/.exec(pathname);
+    if (readmeRoute) {
+      const projectId = validateProjectId(decodeURIComponent(readmeRoute[1]));
+      if (readmeRoute[2] === "attachments" && request.method === "POST") {
+        activeProject(projectId);
+        const filename = decodeURIComponent(requiredString(request.headers["x-taskboard-filename"], "filename", 512));
+        if (filename.includes("/") || filename.includes("\\")) throw new ApiError(400, "INVALID_FILENAME", "Filename must not contain path separators");
+        const chunks = []; let size = 0;
+        for await (const chunk of request) {
+          size += chunk.length;
+          if (size > 25 * 1024 * 1024) throw new ApiError(413, "ATTACHMENT_TOO_LARGE", "Attachment exceeds 25 MiB");
+          chunks.push(chunk);
+        }
+        const id = randomUUID();
+        await mkdir(attachmentsDir, { recursive: true });
+        const file = path.join(attachmentsDir, id);
+        await writeFile(file, Buffer.concat(chunks), { flag: "wx" });
+        try {
+          const attachment = db.createProjectReadmeAttachment(projectId, {
+            id, kind: "inline", filename, contentType: request.headers["content-type"] || "application/octet-stream", size,
+          });
+          return json(response, 201, { attachment });
+        } catch (error) { await unlink(file); throw error; }
+      }
+      if (!readmeRoute[2] && request.method === "GET") return json(response, 200, { readme: db.getProjectReadme(projectId) });
+      if (!readmeRoute[2] && request.method === "PUT") {
+        activeProject(projectId);
+        const input = parseProjectReadmeSave(await body(request));
+        return json(response, 200, { readme: db.saveProjectReadme(projectId, input.content, input.version) });
+      }
+    }
     const projectRoute = /^\/api\/projects\/([^/]+)(?:\/(archive|restore))?$/.exec(pathname);
     if (projectRoute) {
       const id = decodeURIComponent(projectRoute[1]);
@@ -372,9 +403,10 @@ export function createTaskDockServer(options = {}) {
     }
     const attachment = /^\/api\/attachments\/([^/]+)\/(content|download)$/.exec(pathname);
     if (attachment && (request.method === "GET" || request.method === "HEAD")) {
-      const record = db.getAttachment(decodeURIComponent(attachment[1]));
+      const record = db.getAttachment(decodeURIComponent(attachment[1])) ?? db.getProjectReadmeAttachment(decodeURIComponent(attachment[1]));
       if (!record) throw new ApiError(404, "ATTACHMENT_NOT_FOUND", "Attachment not found");
-      taskFor(principal, record.taskId);
+      if (record.taskId) taskFor(principal, record.taskId);
+      else db.getProjectReadme(record.projectId);
       const file = path.join(attachmentsDir, record.id);
       const info = await stat(file);
       response.writeHead(200, { "content-type": attachment[2] === "content" ? record.contentType : "application/octet-stream", "content-length": info.size, "cache-control": "private, no-store", "content-security-policy": "sandbox; default-src 'none'" });
