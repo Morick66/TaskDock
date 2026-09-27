@@ -1,10 +1,14 @@
 [English](README.md) | [简体中文](README.zh-CN.md)
 
-# Codex Taskboard
+# TaskDock
 
 一个本地优先的议题面板，可在浏览器中运行，也可通过独立 CDP 启动器或其注入脚本嵌入 Codex。同一套 HTTP API 为 React UI 和随附 Codex Skill 使用的 `taskctl` CLI 提供支持。
 
 ![Codex Taskboard 产品截图](docs/assets/codex-taskboard.png)
+
+## TaskDock 服务
+
+TaskDock 独立 API、Web 看板及 Docker 部署见 [TaskDock 部署说明](docs/taskdock-deployment.md)。以下 Codex Taskboard 启动器和 CLI 说明对应原有本地产品。
 
 ## 系统要求
 

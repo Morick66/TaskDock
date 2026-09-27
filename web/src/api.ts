@@ -1,5 +1,6 @@
 import type {
   ActorIdentity,
+  Artifact,
   AiChatCatalog,
   AiChatAttachmentInput,
   AiChatRun,
@@ -212,6 +213,70 @@ export async function getProjectSummary(
 
 export async function getTaskboardMetadata(signal?: AbortSignal): Promise<TaskboardMetadata> {
   return request<TaskboardMetadata>("/api/meta", { signal });
+}
+
+export function getAgentboardSession(signal?: AbortSignal): Promise<{
+  authenticated: boolean;
+}> {
+  return request("/api/agentboard/session", { signal });
+}
+
+export function loginTaskdock(key: string): Promise<void> {
+  return request<void>("/api/agentboard/login", {
+    method: "POST",
+    body: JSON.stringify({ key }),
+  });
+}
+
+export function logoutTaskdock(): Promise<void> {
+  return request<void>("/api/agentboard/logout", { method: "POST" });
+}
+
+export interface TaskdockAgent {
+  id: string;
+  name: string;
+  createdAt: string;
+  keys: { id: string; createdAt: string; revokedAt: string | null }[];
+}
+
+export async function listTaskdockAgents(): Promise<TaskdockAgent[]> {
+  return (await request<{ agents: TaskdockAgent[] }>("/api/agents")).agents;
+}
+
+export async function createTaskdockAgent(input: { id: string; name: string }): Promise<{ agent: TaskdockAgent; key: string }> {
+  return request<{ agent: TaskdockAgent; key: string }>("/api/agents", { method: "POST", body: JSON.stringify(input) });
+}
+
+export async function updateTaskdockAgent(input: { id: string; name: string }): Promise<TaskdockAgent> {
+  return (await request<{ agent: TaskdockAgent }>(`/api/agents/${encodeURIComponent(input.id)}`, { method: "PATCH", body: JSON.stringify({ name: input.name }) })).agent;
+}
+
+export async function deleteTaskdockAgent(agentId: string): Promise<void> {
+  await request<void>(`/api/agents/${encodeURIComponent(agentId)}`, { method: "DELETE" });
+}
+
+export async function issueTaskdockKey(agentId: string): Promise<{ id: string; key: string }> {
+  return request(`/api/agents/${encodeURIComponent(agentId)}/keys`, { method: "POST" });
+}
+
+export async function revokeTaskdockKey(agentId: string, keyId: string): Promise<void> {
+  await request(`/api/agents/${encodeURIComponent(agentId)}/keys/${encodeURIComponent(keyId)}`, { method: "DELETE" });
+}
+
+export async function archiveTaskdockProject(projectId: string): Promise<Project> {
+  return (await request<{ project: Project }>(`/api/projects/${encodeURIComponent(projectId)}/archive`, { method: "POST" })).project;
+}
+
+export async function restoreTaskdockProject(projectId: string): Promise<Project> {
+  return (await request<{ project: Project }>(`/api/projects/${encodeURIComponent(projectId)}/restore`, { method: "POST" })).project;
+}
+
+export async function listArtifacts(taskId: string, signal?: AbortSignal): Promise<Artifact[]> {
+  const data = await request<{ artifacts: Artifact[] }>(
+    `/api/tasks/${encodeURIComponent(taskId)}/artifacts`,
+    { signal },
+  );
+  return data.artifacts;
 }
 
 export async function getTaskboardRevision(

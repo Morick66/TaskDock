@@ -1,0 +1,10 @@
+.git
+.worktrees
+node_modules
+dist
+.data
+.tmp
+.wrangler
+cloud-migration-exports
+src-tauri
+*.log

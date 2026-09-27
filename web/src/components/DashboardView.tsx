@@ -28,6 +28,8 @@ interface DashboardViewProps {
   onSummaryAnimationStart: (projectId: string) => void;
   onOpenTask: (task: Task) => void;
   onOpenConversation: (conversation: TaskConversationItem) => void;
+  summaryOverride?: string;
+  taskdockMode?: boolean;
 }
 
 const PRIORITIES = ["urgent", "high", "medium", "low", "none"] satisfies Task["priority"][];
@@ -507,12 +509,14 @@ export function DashboardView({
   onSummaryAnimationStart,
   onOpenTask,
   onOpenConversation,
+  summaryOverride,
+  taskdockMode = false,
 }: DashboardViewProps) {
   const { language, locale, text } = useTaskboardI18n();
   const [projectSummary, setProjectSummary] = useState<ProjectSummary | null>(null);
   const [summaryLoadFailed, setSummaryLoadFailed] = useState(false);
   useEffect(() => {
-    if (isAllProjects) {
+    if (isAllProjects || summaryOverride !== undefined) {
       setProjectSummary(null);
       setSummaryLoadFailed(false);
       return undefined;
@@ -544,7 +548,7 @@ export function DashboardView({
       controller.abort();
       if (timer) clearTimeout(timer);
     };
-  }, [isAllProjects, projectId]);
+  }, [isAllProjects, projectId, summaryOverride]);
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -723,7 +727,7 @@ export function DashboardView({
         `所有项目共有 ${tasks.length} 个议题，${completedTasks.length} 个已完成，${activeTasks.length} 个尚未结束；当前 ${tasks.filter((task) => task.status === "blocked").length} 个遇到阻碍，${overdueTasks.length} 个已逾期。`,
         `Across all projects, ${tasks.length} issues are tracked: ${completedTasks.length} completed and ${activeTasks.length} still open; ${tasks.filter((task) => task.status === "blocked").length} are blocked and ${overdueTasks.length} overdue.`,
       )
-    : projectSummary?.summary
+    : summaryOverride ?? projectSummary?.summary
       ?? (projectSummary?.refreshing
         ? text(
             "Codex 正在整理当前项目的进展、风险和下一步重点…",
@@ -746,7 +750,7 @@ export function DashboardView({
     `${greeting}，${currentUser.name}，今天是${summaryDate}，${summaryBody}`,
     `${greeting}, ${currentUser.name}. Today is ${summaryDate}. ${summaryBody}`,
   );
-  const summaryReady = isAllProjects || projectSummary !== null || summaryLoadFailed;
+  const summaryReady = isAllProjects || summaryOverride !== undefined || projectSummary !== null || summaryLoadFailed;
 
   return (
     <div className="dashboard-view">
@@ -840,7 +844,7 @@ export function DashboardView({
           </section>
 
           <section className="dashboard-panel dashboard-primary-panel dashboard-running-panel">
-            <header><span>{text("运行中对话", "Active conversations")}</span></header>
+            <header><span>{taskdockMode ? "Agent 正在处理" : text("运行中对话", "Active conversations")}</span></header>
             <div className="dashboard-task-list">
               {runningTasks.length ? runningTasks.map((task) => (
                 <article
@@ -864,14 +868,14 @@ export function DashboardView({
                       <img className="task-processing-glyph" src={processingAnimation} alt="" aria-hidden="true" />
                       <span className="task-processing-label">{text("正在处理…", "Processing…")}</span>
                     </span>
-                    <TaskConversationMenu
+                    {!taskdockMode && <TaskConversationMenu
                       conversations={presentations[task.id].conversations}
                       onOpenConversation={onOpenConversation}
-                    />
+                    />}
                   </div>
                 </article>
               )) : (
-                <div className="dashboard-empty">{text("当前没有运行中的对话", "No active conversations")}</div>
+                <div className="dashboard-empty">{taskdockMode ? "当前没有 Agent 正在处理的议题" : text("当前没有运行中的对话", "No active conversations")}</div>
               )}
             </div>
           </section>

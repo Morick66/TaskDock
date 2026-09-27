@@ -1,0 +1,14 @@
+services:
+  taskdock:
+    build: .
+    ports:
+      - "${TASKDOCK_BIND_HOST:-127.0.0.1}:${TASKDOCK_PORT:-47823}:47823"
+    environment:
+      TASKDOCK_HOST: 0.0.0.0
+      TASKDOCK_PORT: 47823
+      TASKDOCK_DATA_DIR: /data
+      TASKDOCK_USER_KEY: ${TASKDOCK_USER_KEY:?Set TASKDOCK_USER_KEY}
+      TASKDOCK_SESSION_SECRET: ${TASKDOCK_SESSION_SECRET:?Set TASKDOCK_SESSION_SECRET}
+    volumes:
+      - ./taskdock-data:/data
+    restart: unless-stopped
