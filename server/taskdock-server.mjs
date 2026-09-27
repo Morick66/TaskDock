@@ -312,7 +312,7 @@ export function createTaskDockServer(options = {}) {
       return json(response, 200, { projects });
     }
     if (pathname === "/api/projects" && request.method === "POST") {
-      admin(principal); const input = await body(request);
+      const input = await body(request);
       return json(response, 201, { project: projectInfo(db.createProject({ id: validateProjectId(input.id), name: requiredString(input.name, "name"), workspacePath: null })) });
     }
     const projectRoute = /^\/api\/projects\/([^/]+)(?:\/(archive|restore))?$/.exec(pathname);
