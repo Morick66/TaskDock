@@ -94,13 +94,6 @@ export function createTaskDockServer(options = {}) {
     throw new ApiError(401, "UNAUTHORIZED", "Authentication required");
   }
 
-  function scope(principal, projectId) {
-    if (principal.role === "admin") return;
-    activeProject(projectId);
-  }
-  function admin(principal) {
-    if (principal.role !== "admin") throw new ApiError(403, "ADMIN_REQUIRED", "Administrator key required");
-  }
   function sessionCookie(request) {
     const expiry = String(Date.now() + 24 * 60 * 60 * 1000);
     const secure = request.socket.encrypted || request.headers["x-forwarded-proto"] === "https" ? "; Secure" : "";
@@ -126,13 +119,8 @@ export function createTaskDockServer(options = {}) {
   function taskFor(principal, id) {
     const task = db.getTask(id);
     if (!task) throw new ApiError(404, "TASK_NOT_FOUND", "Task not found");
-    scope(principal, task.projectId);
     const claim = sql.prepare("SELECT a.id, a.name FROM agentboard_claims c JOIN agentboard_agents a ON a.id = c.agent_id WHERE c.task_id = ?").get(task.id);
     return { ...task, claimedBy: claim ? actor(claim) : null };
-  }
-  function owner(principal, task) {
-    if (principal.role === "admin") return;
-    if (task.claimedBy?.id !== principal.id) throw new ApiError(403, "CLAIM_REQUIRED", "This task is claimed by another Agent or is unclaimed");
   }
   function event(taskId, principal, field, oldValue, newValue) {
     sql.prepare(`INSERT INTO task_activities (id, task_id, actor_type, actor_id, actor_name, actor_avatar_url, changes, created_at) VALUES (?, ?, 'agent', ?, ?, NULL, ?, ?)`).run(
@@ -147,7 +135,7 @@ export function createTaskDockServer(options = {}) {
     if (action === "claim" && (current.status !== "todo" || current.claimedBy || current.archivedAt)) {
       throw new ApiError(409, "TASK_NOT_CLAIMABLE", "Task must be an unclaimed, active todo");
     }
-    if (action === "release") owner(principal, current);
+    if (action === "release" && !current.claimedBy) throw new ApiError(409, "TASK_NOT_CLAIMED", "Task is not claimed");
     sql.exec("BEGIN IMMEDIATE");
     try {
       const nextStatus = action === "claim" ? "in_progress" : "todo";
@@ -161,7 +149,6 @@ export function createTaskDockServer(options = {}) {
     return taskFor(principal, current.id);
   }
   function submitArtifact(principal, task, input) {
-    owner(principal, task);
     activeProject(task.projectId);
     const type = requiredString(input.type, "type", 40);
     const title = requiredString(input.title, "title");
@@ -183,15 +170,13 @@ export function createTaskDockServer(options = {}) {
   async function operation(principal, name, args = {}) {
     if (name === "list_tasks") {
       const filters = { projectId: args.projectId, status: args.status, archived: "false" };
-      if (filters.projectId) scope(principal, filters.projectId);
-      const tasks = db.listTasks(filters).filter((task) => principal.role === "admin" || !projectArchived(task.projectId));
+      const tasks = db.listTasks(filters);
       return { tasks: tasks.map((task) => taskFor(principal, task.id)) };
     }
     if (name === "get_task") return { task: taskFor(principal, args.taskId) };
     const task = taskFor(principal, args.taskId);
     if (name === "claim_task" || name === "release_task") return { task: transition(principal, task, name === "claim_task" ? "claim" : "release", args.version) };
     if (name === "update_task") {
-      owner(principal, task);
       activeProject(task.projectId);
       const { taskId: _taskId, ...patch } = args;
       const { version, changes, assigneeTarget, threadId, threadBinding, agentSession } = parseTaskPatch(patch, () => null);
@@ -241,11 +226,10 @@ export function createTaskDockServer(options = {}) {
     const principal = authenticate(request);
     if (pathname === "/api/revisions" && request.method === "GET") return json(response, 200, { changed: true, revision: Date.now() });
     if (pathname === "/api/agents" && request.method === "GET") {
-      admin(principal);
       return json(response, 200, { agents: sql.prepare("SELECT id FROM agentboard_agents WHERE deleted_at IS NULL ORDER BY created_at, id").all().map((row) => agentInfo(row.id)) });
     }
     if (pathname === "/api/agents" && request.method === "POST") {
-      admin(principal); const input = await body(request);
+      const input = await body(request);
       const id = requiredString(input.id, "id", 96); const name = requiredString(input.name, "name", 120);
       if (!/^[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$/.test(id)) throw new ApiError(400, "INVALID_AGENT_ID", "Agent ID must be a URL-safe identifier");
       const key = `agb_${randomBytes(32).toString("base64url")}`;
@@ -259,7 +243,7 @@ export function createTaskDockServer(options = {}) {
     }
     const agentRoute = /^\/api\/agents\/([^/]+)$/.exec(pathname);
     if (agentRoute && request.method === "PATCH") {
-      admin(principal); const id = decodeURIComponent(agentRoute[1]);
+      const id = decodeURIComponent(agentRoute[1]);
       agentInfo(id);
       const input = await body(request);
       const name = requiredString(input.name, "name", 120);
@@ -267,7 +251,7 @@ export function createTaskDockServer(options = {}) {
       return json(response, 200, { agent: agentInfo(id) });
     }
     if (agentRoute && request.method === "DELETE") {
-      admin(principal); const id = decodeURIComponent(agentRoute[1]);
+      const id = decodeURIComponent(agentRoute[1]);
       const agent = agentInfo(id);
       const now = new Date().toISOString();
       sql.exec("BEGIN IMMEDIATE");
@@ -277,7 +261,7 @@ export function createTaskDockServer(options = {}) {
           sql.prepare("UPDATE tasks SET status = 'todo', version = version + 1, updated_at = ? WHERE id = ?").run(now, claim.task_id);
           sql.prepare("DELETE FROM agentboard_claims WHERE task_id = ?").run(claim.task_id);
           sql.prepare(`INSERT INTO task_activities (id, task_id, actor_type, actor_id, actor_name, actor_avatar_url, changes, created_at)
-            VALUES (?, ?, 'user', ?, ?, NULL, ?, ?)`).run(randomUUID(), claim.task_id, principal.id, principal.name,
+            VALUES (?, ?, ?, ?, ?, NULL, ?, ?)`).run(randomUUID(), claim.task_id, principal.role === "agent" ? "agent" : "user", principal.id, principal.name,
             JSON.stringify([{ field: "claim", before: actor(agent), after: null }]), now);
         }
         sql.prepare("DELETE FROM agentboard_keys WHERE agent_id = ?").run(id);
@@ -289,7 +273,7 @@ export function createTaskDockServer(options = {}) {
     }
     const keyRoute = /^\/api\/agents\/([^/]+)\/keys(?:\/([^/]+))?$/.exec(pathname);
     if (keyRoute) {
-      admin(principal); const agentId = decodeURIComponent(keyRoute[1]);
+      const agentId = decodeURIComponent(keyRoute[1]);
       agentInfo(agentId);
       if (request.method === "POST" && !keyRoute[2]) {
         const key = `agb_${randomBytes(32).toString("base64url")}`; const id = randomUUID();
@@ -308,7 +292,7 @@ export function createTaskDockServer(options = {}) {
       }
     }
     if (pathname === "/api/projects" && request.method === "GET") {
-      const projects = db.listProjects().filter((p) => (p.id !== "local" || p.issueCount > 0) && (principal.role === "admin" || !projectArchived(p.id))).map(projectInfo);
+      const projects = db.listProjects().filter((p) => p.id !== "local" || p.issueCount > 0).map(projectInfo);
       return json(response, 200, { projects });
     }
     if (pathname === "/api/projects" && request.method === "POST") {
@@ -317,7 +301,7 @@ export function createTaskDockServer(options = {}) {
     }
     const projectRoute = /^\/api\/projects\/([^/]+)(?:\/(archive|restore))?$/.exec(pathname);
     if (projectRoute) {
-      admin(principal); const id = decodeURIComponent(projectRoute[1]);
+      const id = decodeURIComponent(projectRoute[1]);
       if (id === "local") throw new ApiError(403, "SYSTEM_PROJECT", "The global project cannot be archived or deleted");
       const project = db.getProject(id);
       if (!project) throw new ApiError(404, "PROJECT_NOT_FOUND", "Project not found");
@@ -348,7 +332,6 @@ export function createTaskDockServer(options = {}) {
     if (pathname === "/api/tasks" && request.method === "POST") {
       const input = await body(request);
       const parsed = parseTaskCreate({ status: "todo", ...input }, () => null);
-      scope(principal, parsed.projectId);
       activeProject(parsed.projectId);
       if (parsed.assigneeTarget || parsed.threadId || parsed.threadBinding || parsed.agentSession) throw new ApiError(400, "INVALID_FIELD", "AgentBoard does not accept client identity fields");
       return json(response, 201, { task: taskFor(principal, db.createTask({ ...parsed, actor: actor(principal), assignee: actor(principal) }).id) });
@@ -366,7 +349,6 @@ export function createTaskDockServer(options = {}) {
       if (action === "artifacts" && request.method === "POST") return json(response, 201, await operation(principal, "submit_artifact", { ...await body(request), taskId: id }));
       if (action === "attachments" && request.method === "GET") return json(response, 200, { attachments: db.listAttachments(task.id) });
       if (action === "attachments" && request.method === "POST") {
-        owner(principal, task);
         activeProject(task.projectId);
         let filename;
         try { filename = decodeURIComponent(requiredString(request.headers["x-taskboard-filename"], "filename", 512)); }

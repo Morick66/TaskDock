@@ -71,7 +71,7 @@ export function TaskdockSettings({ projects, agents, reload }: Props) {
   }
 
   return <div className="taskdock-settings">
-    <header className="taskdock-settings-heading"><p>管理项目和 Agent 身份。每个 Agent 使用一个 API Key，可访问所有项目。</p></header>
+    <header className="taskdock-settings-heading"><p>管理项目和 Agent 身份。每个 Agent 使用一个 API Key，可通过 API 管理所有项目、任务和 Agent。</p></header>
     {error && <div className="agentboard-error" role="alert">{error}</div>}
     {notice && <div className="taskdock-notice" role="status">{notice}</div>}
     <div className="taskdock-settings-grid">
