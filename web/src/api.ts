@@ -243,7 +243,7 @@ export async function listTaskdockAgents(): Promise<TaskdockAgent[]> {
   return (await request<{ agents: TaskdockAgent[] }>("/api/agents")).agents;
 }
 
-export async function createTaskdockAgent(input: { id: string; name: string }): Promise<{ agent: TaskdockAgent; key: string }> {
+export async function createTaskdockAgent(input: { id?: string; name: string }): Promise<{ agent: TaskdockAgent; key: string }> {
   return request<{ agent: TaskdockAgent; key: string }>("/api/agents", { method: "POST", body: JSON.stringify(input) });
 }
 

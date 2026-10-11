@@ -141,7 +141,7 @@ export function createTaskDockServer(options = {}) {
     }
     sql.exec("BEGIN IMMEDIATE");
     try {
-      const nextStatus = action === "claim" ? "in_progress" : current.status === "done" ? "done" : "todo";
+      const nextStatus = action === "claim" ? "in_progress" : ["in_review", "done"].includes(current.status) ? current.status : "todo";
       const updated = sql.prepare("UPDATE tasks SET status = ?, version = version + 1, updated_at = ? WHERE id = ? AND version = ?").run(nextStatus, new Date().toISOString(), current.id, version);
       if (updated.changes !== 1) throw new ApiError(409, "VERSION_CONFLICT", "Task version changed");
       if (action === "claim") sql.prepare("INSERT INTO agentboard_claims (task_id, agent_id, claimed_at) VALUES (?, ?, ?)").run(current.id, principal.id, new Date().toISOString());
@@ -236,7 +236,7 @@ export function createTaskDockServer(options = {}) {
     }
     if (pathname === "/api/agents" && request.method === "POST") {
       const input = await body(request);
-      const id = requiredString(input.id, "id", 96); const name = requiredString(input.name, "name", 120);
+      const id = input.id === undefined ? randomUUID() : requiredString(input.id, "id", 96); const name = requiredString(input.name, "name", 120);
       if (!/^[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$/.test(id)) throw new ApiError(400, "INVALID_AGENT_ID", "Agent ID must be a URL-safe identifier");
       const key = `agb_${randomBytes(32).toString("base64url")}`;
       sql.exec("BEGIN IMMEDIATE");
