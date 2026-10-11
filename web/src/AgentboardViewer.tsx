@@ -18,7 +18,8 @@ import {
 import { TASK_PRIORITIES, TASK_STATUSES, type Attachment, type ActorIdentity, type Artifact, type Comment, type Project, type Task, type TaskDraft, type TaskChangeActivity, type TaskStatus } from "./types";
 import { TaskboardLanguageProvider, taskPriorityLabel, taskStatusLabel } from "./i18n";
 import { MarkdownDocument } from "./components/MarkdownDocument";
-import { StatusIcon } from "./components/SemanticIcons";
+import { PlusIcon, PriorityIcon, ProjectIcon, RefreshIcon, StatusIcon } from "./components/SemanticIcons";
+import { TaskboardIcon } from "./components/TaskboardIcon";
 import { DashboardView } from "./components/DashboardView";
 import { ProjectReadmeView } from "./components/ProjectReadmeView";
 import { TaskdockSettings } from "./TaskdockSettings";
@@ -215,9 +216,10 @@ export function AgentboardViewer() {
   if (session === "loading") return <div className="agentboard-login">正在连接 TaskDock…</div>;
   if (session === "guest") {
     return <main className="agentboard-login"><form onSubmit={(event) => void submitLogin(event)}>
-      <div className="agentboard-brand">TaskDock</div>
+      <div className="agentboard-brand"><TaskboardIcon name="panel" width={22} height={22} />TaskDock</div>
+      <span className="agentboard-eyebrow">YOUR SHARED WORKSPACE</span>
       <h1>登录工作区</h1>
-      <p>查看协作进展，并管理项目与 Agent 身份。</p>
+      <p>把任务交给 Agent，让进展清晰可见。<br />项目、协作与成果，都在同一个工作区。</p>
       <label htmlFor="taskdock-login-key">登录 Key</label>
       <input id="taskdock-login-key" type="password" autoComplete="current-password" value={loginKey} onChange={(event) => setLoginKey(event.target.value)} required />
       {loginError && <p role="alert" className="agentboard-error">{loginError}</p>}
@@ -244,26 +246,27 @@ export function AgentboardViewer() {
   const dashboardSummary = `当前项目共有 ${scopedTasks.length} 个议题，${scopedTasks.filter((task) => task.status === "done").length} 个已完成，${scopedTasks.filter((task) => task.status === "in_progress").length} 个处理中，${scopedTasks.filter((task) => task.status === "blocked").length} 个阻塞。`;
   const taskCard = (task: Task) => <article key={task.id} className={`task-card status-${task.status} agentboard-readonly-card${selectedTask?.id === task.id ? " selected" : ""}`}>
     <button className="task-card-open" type="button" aria-label={`打开 ${task.identifier}: ${task.title}`} onClick={() => setSelectedTask(task)} />
-    <div className="card-topline"><span className="card-reference"><span className="task-identifier">ID: {task.identifier}</span></span></div>
+    <div className="card-topline"><span className="card-reference"><span className="task-identifier">{task.identifier}</span></span>{task.priority !== "none" && <span className={`agentboard-priority priority-${task.priority}`}><PriorityIcon priority={task.priority} size={13} />{taskPriorityLabel("zh", task.priority)}</span>}</div>
     <h3>{task.title}</h3>
-    {task.description && <p className="task-card-description">{task.description}</p>}
-    <div className="agentboard-card-footer"><span>{task.claimedBy ? `◉ ${task.claimedBy.name}` : "未认领"}</span>{task.priority !== "none" && <span>{task.priority}</span>}</div>
+    {task.description && <p className="task-card-description">{task.description.replace(/[#*`>]/g, "").replace(/\n+/g, " ")}</p>}
+    {task.labels.length > 0 && <div className="agentboard-card-labels">{task.labels.slice(0, 2).map((label) => <span key={label}>{label}</span>)}{task.labels.length > 2 && <span>+{task.labels.length - 2}</span>}</div>}
+    <div className="agentboard-card-footer"><span className={task.claimedBy ? "agentboard-assigned" : ""}>{task.claimedBy?.name ?? "等待认领"}</span><time dateTime={task.updatedAt}>{new Date(task.updatedAt).toLocaleDateString("zh-CN", { month: "short", day: "numeric" })}</time></div>
   </article>;
 
   return <TaskboardLanguageProvider language="zh"><div className="app-shell agentboard-app">
-    <aside className="agentboard-sidebar"><div className="agentboard-sidebar-brand"><span className="agentboard-brand-mark">◈</span><strong>TaskDock</strong></div><nav aria-label="项目导航">
-      <button className={`agentboard-sidebar-item${!projectId && view !== "settings" ? " active" : ""}`} type="button" onClick={() => { setProjectId(null); setView("dashboard"); }}><span className="agentboard-nav-symbol">▦</span><span>全局</span><small>{tasks.length}</small></button>
+    <aside className="agentboard-sidebar"><div className="agentboard-sidebar-brand"><span className="agentboard-brand-mark"><TaskboardIcon name="panel" width={19} height={19} /></span><div><strong>TaskDock</strong><span className="agentboard-brand-caption">人与 Agent 的协作空间</span></div></div><nav aria-label="项目导航">
+      <button className={`agentboard-sidebar-item${!projectId && view !== "settings" ? " active" : ""}`} type="button" onClick={() => { setProjectId(null); setView("dashboard"); }}><TaskboardIcon name="home" width={18} height={18} /><span>全局概览</span><small>{tasks.length}</small></button>
       <div className="agentboard-sidebar-label">项目</div>
-      {navProjects.map((project) => <button className={`agentboard-sidebar-item${projectId === project.id && view !== "settings" ? " active" : ""}`} type="button" key={project.id} onClick={() => { setProjectId(project.id); setView("dashboard"); }}><span className="agentboard-project-dot" /><span>{project.id === "local" ? "未分类任务" : project.name}</span><small>{project.issueCount}</small></button>)}
+      {navProjects.map((project) => <button className={`agentboard-sidebar-item${projectId === project.id && view !== "settings" ? " active" : ""}`} type="button" key={project.id} onClick={() => { setProjectId(project.id); setView("dashboard"); }}><ProjectIcon size={17} /><span>{project.id === "local" ? "未分类任务" : project.name}</span><small>{project.issueCount}</small></button>)}
       {navProjects.length === 0 && <p className="agentboard-sidebar-empty">暂无项目，可在设置中创建。</p>}
-    </nav></aside><main className="workspace">
+    </nav><div className="agentboard-sidebar-footer"><span>协作工作区</span><strong>{activeProjects.length} 个项目 · {agents.length} 个 Agent</strong><p>每一次交接，都有迹可循。</p></div></aside><main className="workspace">
     <header className="workspace-header agentboard-workspace-header"><div className="agentboard-page-heading"><h1>{view === "settings" ? "管理设置" : projectId === "local" ? "未分类任务" : projectName}</h1>{view !== "settings" && <p>{projectId ? "查看该项目的任务和 Agent 进展" : "查看所有项目的任务和 Agent 进展"}</p>}</div><div className="workspace-drag-region" aria-hidden="true" /><button className={`taskdock-header-action${view === "settings" ? " active" : ""}`} type="button" onClick={() => setView("settings")}>设置</button><button className="taskdock-header-action" type="button" onClick={() => void logout()}>退出</button></header>
     {view !== "settings" && <div className="board-toolbar"><div className="view-tabs" aria-label="看板视图">
       <button className={`view-tab${view === "dashboard" ? " active" : ""}`} type="button" onClick={() => setView("dashboard")}>仪表盘</button>
-      <button className={`view-tab${view === "board" ? " active" : ""}`} type="button" onClick={() => setView("board")}>议题看板</button>
+      <button className={`view-tab${view === "board" ? " active" : ""}`} type="button" onClick={() => setView("board")}>任务看板</button>
       <button className={`view-tab${view === "list" ? " active" : ""}`} type="button" onClick={() => setView("list")}>列表视图</button>
       {projectId && projectId !== "local" && <button className={`view-tab${view === "readme" ? " active" : ""}`} type="button" onClick={() => setView("readme")}>项目文档</button>}
-    </div><div className="toolbar-tools">{(view === "board" || view === "list") && <div className={`search-field${search ? " has-value" : ""}`}><span className="search-icon">⌕</span><input type="search" aria-label="搜索议题" placeholder="搜索议题…" value={search} onChange={(event) => setSearch(event.target.value)} /></div>}<button className="agentboard-create-task" type="button" disabled={activeProjects.length === 0} onClick={() => setEditor({ task: null })}>新建任务</button><button className="agentboard-refresh" type="button" onClick={() => void reload().catch((error: unknown) => setLoadError(error instanceof Error ? error.message : "刷新失败"))} aria-label="刷新">↻</button></div></div>}
+    </div><div className="toolbar-tools">{(view === "board" || view === "list") && <div className={`search-field${search ? " has-value" : ""}`}><TaskboardIcon name="search" width={16} height={16} /><input type="search" aria-label="搜索议题" placeholder="搜索任务…" value={search} onChange={(event) => setSearch(event.target.value)} /></div>}<button className="agentboard-create-task" type="button" disabled={activeProjects.length === 0} onClick={() => setEditor({ task: null })}><PlusIcon size={15} />新建任务</button><button className="agentboard-refresh" type="button" onClick={() => void reload().catch((error: unknown) => setLoadError(error instanceof Error ? error.message : "刷新失败"))} aria-label="刷新"><RefreshIcon size={16} /></button></div></div>}
     {loadError && <div role="alert" className="agentboard-error">{loadError}</div>}
     {view === "dashboard" && <DashboardView projectId={projectId ?? "all"} projectCreatedAt={projectId ? projects.find((project) => project.id === projectId)?.createdAt ?? null : null} isAllProjects={!projectId} tasks={scopedTasks} presentations={presentations} currentUser={currentUser} animateSummary={false} onSummaryAnimationStart={() => undefined} onOpenTask={setSelectedTask} onOpenConversation={() => undefined} summaryOverride={dashboardSummary} taskdockMode />}
     {view === "readme" && projectId && projects.find((project) => project.id === projectId) && <ProjectReadmeView
@@ -277,7 +280,7 @@ export function AgentboardViewer() {
     />}
     {view === "settings" && <TaskdockSettings projects={projects} agents={agents} reload={reload} />}
     {view === "board" ? <div className="issue-board-layout agentboard-board-layout" style={{ "--main-column-count": statusOrder.length } as CSSProperties}><div className="board-scroll"><div className="board">
-      {statusOrder.map((status: TaskStatus) => { const columnTasks = visibleTasks.filter((task) => task.status === status); return <section key={status} className={`board-column status-${status}`}><header className="column-header"><div className="column-heading"><span className="column-status-icon"><StatusIcon status={status} color="var(--column-status-color)" size={14} /></span><h2>{taskStatusLabel("zh", status)}{columnTasks.length ? ` ${columnTasks.length}` : ""}</h2></div></header><div className="column-list">{columnTasks.map(taskCard)}{columnTasks.length === 0 && <div className="column-empty">暂无议题</div>}</div></section>; })}
+      {statusOrder.map((status: TaskStatus) => { const columnTasks = visibleTasks.filter((task) => task.status === status); return <section key={status} className={`board-column status-${status}`}><header className="column-header"><div className="column-heading"><span className="column-status-icon"><StatusIcon status={status} color="var(--column-status-color)" size={16} /></span><h2>{taskStatusLabel("zh", status)}</h2><span className="agentboard-column-count">{columnTasks.length}</span></div></header><div className="column-list">{columnTasks.map(taskCard)}{columnTasks.length === 0 && <div className="column-empty"><StatusIcon status={status} size={23} /><strong>暂无任务</strong><span>任务进入此状态后会显示在这里</span></div>}</div></section>; })}
     </div></div></div> : view === "list" ? <div className="issue-list-view agentboard-list"><div className="issue-list-groups">{statusOrder.map((status) => { const groupTasks = visibleTasks.filter((task) => task.status === status); const isCollapsed = collapsed.has(status); return <section className={`issue-list-group status-${status}`} key={status}><button className="issue-list-group-header" type="button" aria-expanded={!isCollapsed} onClick={() => setCollapsed((current) => { const next = new Set(current); if (next.has(status)) next.delete(status); else next.add(status); return next; })}><span>{isCollapsed ? "›" : "⌄"}</span><span className="issue-list-status-icon"><StatusIcon status={status} color="currentColor" size={14} /></span><strong>{taskStatusLabel("zh", status)}</strong><span>{groupTasks.length}</span></button>{!isCollapsed && <div className="issue-list-rows">{groupTasks.map((task) => <button className="issue-list-row agentboard-list-row" type="button" key={task.id} onClick={() => setSelectedTask(task)}><span className="issue-list-title-cell"><small>{task.identifier}</small><strong>{task.title}</strong></span><span className="agentboard-list-agent">{task.claimedBy?.name ?? "未认领"}</span><time dateTime={task.updatedAt}>{date(task.updatedAt)}</time></button>)}{groupTasks.length === 0 && <div className="issue-list-empty">暂无议题</div>}</div>}</section>; })}</div></div> : null}
   </main>
     {selectedTask && <div className="agentboard-detail-backdrop" onClick={() => setSelectedTask(null)}><aside className="agentboard-detail" onClick={(event) => event.stopPropagation()} aria-label="任务详情">
