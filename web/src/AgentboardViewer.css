@@ -328,6 +328,7 @@
 .agentboard-app .agentboard-board-layout .board-column .column-header { flex-basis: 44px; background: transparent; border-radius: 0; }
 .agentboard-app .agentboard-board-layout .board-column .column-header::before { display: none; }
 .agentboard-app .agentboard-board-layout .board { grid-template-columns: repeat(7, minmax(272px, 1fr)); min-width: 2024px; }
+.agentboard-app .agentboard-board-layout .board-column { width: 100%; min-width: 0; max-width: none; }
 .agentboard-app .agentboard-board-layout .board-column.status-todo { --column-status-color: var(--accent); }
 .agentboard-app .agentboard-board-layout .board-column.status-in_progress { --column-status-color: var(--status-progress); }
 .agentboard-app .agentboard-board-layout .board-column.status-in_review { --column-status-color: var(--status-review); }
