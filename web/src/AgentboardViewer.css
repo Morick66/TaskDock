@@ -1,4 +1,31 @@
-.agentboard-app { color: var(--text-primary); }
+.agentboard-app, .agentboard-login {
+  --bg: #111318;
+  --header-bg: #111318;
+  --sidebar-bg: #17191f;
+  --surface: #1b1e25;
+  --surface-raised: #22262f;
+  --surface-muted: #252933;
+  --surface-hover: #272c36;
+  --surface-active: #30303f;
+  --column-header: #1b1e25;
+  --text-primary: #edf0f6;
+  --text-secondary: #b1b8c8;
+  --text-tertiary: #8b94a7;
+  --text-quaternary: #697386;
+  --border: #2c313c;
+  --border-strong: #3d4556;
+  --accent: #aa98ff;
+  --accent-hover: #bbaaFF;
+  --accent-soft: #aa98ff18;
+  --status-progress: #e9bd68;
+  --status-review: #80a7f8;
+  --status-done: #79cbb3;
+  --status-blocked: #ef8d98;
+  --card-shadow: 0 4px 12px #00000016;
+  color: var(--text-primary);
+  font-size: 14px;
+  line-height: 1.6;
+}
 .agentboard-create-task, .agentboard-edit-task { padding: 7px 11px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface); color: var(--text-primary); font: inherit; font-size: 12px; cursor: pointer; }
 .agentboard-create-task { background: var(--accent); border-color: var(--accent); color: white; }
 .agentboard-task-heading { display: flex; align-items: center; gap: 16px; }
@@ -173,4 +200,176 @@
   .agentboard-page-heading p { display: none; }
   .agentboard-app .board-toolbar, .agentboard-app .agentboard-board-layout { padding-left: 12px; padding-right: 12px; }
   .taskdock-settings { padding: 18px 14px 36px; }
+}
+
+/* TaskDock's standalone workspace. Shared Codex surfaces retain their own tokens. */
+.app-shell.agentboard-app { grid-template-columns: 248px minmax(0, 1fr); }
+.agentboard-sidebar { display: flex; flex-direction: column; padding: 28px 16px 20px; background: var(--sidebar-bg); }
+.agentboard-sidebar-brand { gap: 12px; padding: 0 8px 32px; }
+.agentboard-sidebar-brand strong { font-size: 20px; font-weight: 700; letter-spacing: -.6px; }
+.agentboard-brand-mark { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; background: var(--accent-soft); color: var(--accent); }
+.agentboard-brand-caption { display: block; margin-top: 3px; font-size: 11px; font-weight: 400; color: var(--text-tertiary); }
+.agentboard-sidebar nav { overflow-y: auto; }
+.agentboard-sidebar-item { min-height: 44px; gap: 12px; padding: 10px 12px; border-radius: 8px; font-size: 13px; margin-bottom: 4px; }
+.agentboard-sidebar-item.active { background: var(--accent-soft); color: #c7bbff; }
+.agentboard-sidebar-item svg { color: var(--text-tertiary); }
+.agentboard-sidebar-item.active svg { color: var(--accent); }
+.agentboard-sidebar-item small { min-width: 24px; text-align: center; padding: 0 5px; border-radius: 5px; background: #ffffff08; font-size: 11px; font-variant-numeric: tabular-nums; }
+.agentboard-sidebar-label { margin: 28px 12px 12px; color: var(--text-tertiary); font-size: 11px; letter-spacing: 1px; }
+.agentboard-sidebar-footer { margin-top: auto; padding: 20px 10px 2px; border-top: 1px solid var(--border); }
+.agentboard-sidebar-footer > span { color: var(--text-tertiary); font-size: 11px; }
+.agentboard-sidebar-footer strong { display: block; margin-top: 8px; font-size: 12px; font-weight: 500; color: var(--text-secondary); }
+.agentboard-sidebar-footer p { margin: 6px 0 0; font-size: 11px; color: var(--text-tertiary); }
+.agentboard-app .workspace { background: var(--bg); }
+.agentboard-app .agentboard-workspace-header { flex: 0 0 96px; min-height: 96px; max-height: none; height: 96px; padding: 0 36px; border-bottom: 1px solid var(--border); background: var(--bg); }
+.agentboard-page-heading h1 { font-size: 26px; font-weight: 650; letter-spacing: -.7px; }
+.agentboard-page-heading p { margin-top: 7px; font-size: 12px; }
+.agentboard-workspace-header .taskdock-header-action { padding: 8px 12px; border-radius: 7px; color: var(--text-secondary); }
+.agentboard-workspace-header .taskdock-header-action:hover { background: var(--surface-hover); color: var(--text-primary); }
+.agentboard-app .board-toolbar { flex: 0 0 auto; height: auto; min-height: 76px; padding: 18px 36px; gap: 16px; }
+.agentboard-app .view-tabs { gap: 4px; padding: 4px; border: 1px solid var(--border); border-radius: 9px; background: var(--sidebar-bg); }
+.agentboard-app .view-tab { min-height: 32px; padding: 6px 15px; border: 0; border-radius: 6px; background: transparent; box-shadow: none; font-size: 12px; color: var(--text-tertiary); }
+.agentboard-app .view-tab.active { background: var(--surface-active); color: var(--text-primary); box-shadow: 0 1px 4px #0002; }
+.agentboard-app .toolbar-tools { gap: 10px; }
+.agentboard-app .search-field { height: 36px; width: 206px; padding: 0 11px; gap: 9px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
+.agentboard-app .search-field input { width: 100%; font-size: 12px; }
+.agentboard-create-task, .agentboard-edit-task { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 36px; padding: 8px 14px; border-radius: 8px; font-size: 12px; font-weight: 600; }
+.agentboard-create-task, .agentboard-editor footer button[type="submit"], .agentboard-login button, .agentboard-app .taskdock-form > button, .agentboard-app .taskdock-onboarding button { background: var(--accent); color: #181326; border-color: var(--accent); }
+.agentboard-create-task:hover, .agentboard-editor footer button[type="submit"]:hover, .agentboard-login button:hover { background: var(--accent-hover); }
+.agentboard-refresh { display: grid; place-items: center; width: 36px; height: 36px; border: 1px solid var(--border); border-radius: 8px; }
+.agentboard-app .agentboard-board-layout { padding: 4px 36px 24px; }
+.agentboard-board-layout .board { grid-template-columns: repeat(7, minmax(272px, 1fr)); min-width: 2024px; gap: 16px; }
+.agentboard-app .board-column { background: transparent; }
+.agentboard-app .column-header { height: 44px; padding: 0 6px; margin-bottom: 12px; border: 0; border-radius: 0; background: transparent; }
+.agentboard-app .column-heading { gap: 9px; width: 100%; }
+.agentboard-app .column-heading h2 { color: var(--text-secondary); font-size: 13px; font-weight: 600; }
+.agentboard-column-count { padding: 1px 7px; border: 1px solid var(--border); border-radius: 5px; color: var(--text-tertiary); font-size: 11px; font-variant-numeric: tabular-nums; }
+.agentboard-app .column-list { gap: 12px; padding: 0 1px 16px; background: transparent; border-radius: 0; }
+.agentboard-app .task-card { padding: 17px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); box-shadow: var(--card-shadow); }
+.agentboard-app .task-card:hover { border-color: var(--border-strong); background: #20242d; }
+.agentboard-app .card-topline { justify-content: space-between; gap: 8px; margin-bottom: 11px; }
+.agentboard-app .task-identifier { color: var(--text-tertiary); font-size: 11px; letter-spacing: .3px; }
+.agentboard-app .task-card h3 { margin: 0 0 9px; color: var(--text-primary); font-size: 14px; font-weight: 550; line-height: 1.6; }
+.agentboard-app .task-card-description { margin: 0; color: var(--text-tertiary); font-size: 12px; line-height: 1.7; -webkit-line-clamp: 2; }
+.agentboard-priority { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; color: var(--text-secondary); }
+.agentboard-priority.priority-high, .agentboard-priority.priority-urgent { color: #e9bd68; }
+.agentboard-card-labels { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 13px; }
+.agentboard-card-labels span { padding: 2px 7px; border: 1px solid #444055; border-radius: 5px; background: #aa98ff0a; color: #b7afcd; font-size: 10px; }
+.agentboard-card-footer { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border); color: var(--text-tertiary); font-size: 11px; }
+.agentboard-assigned { color: #79cbb3; }
+.agentboard-app .column-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; min-height: 170px; padding: 24px 12px; border: 1px dashed var(--border); border-radius: 10px; color: var(--text-quaternary); }
+.agentboard-app .column-empty strong { font-size: 12px; font-weight: 500; color: var(--text-tertiary); }
+.agentboard-app .column-empty span { font-size: 11px; }
+.agentboard-app .dashboard-view.dashboard-view { padding: 8px 24px 44px; }
+.agentboard-app .dashboard-overview { min-height: 148px; margin-bottom: 24px; gap: 28px; }
+.agentboard-app .dashboard-heading { min-height: 148px; padding: 12px 0; }
+.agentboard-app .dashboard-heading h1 { font-size: 20px; line-height: 1.4; letter-spacing: -.4px; }
+.agentboard-app .dashboard-hero-value { flex-wrap: wrap; gap: 8px 14px; }
+.agentboard-app .dashboard-hero-value strong { background: none; color: var(--accent); -webkit-text-fill-color: var(--accent); font-size: 60px; line-height: 1.1; letter-spacing: -3px; }
+.agentboard-app .dashboard-hero-value span { font-size: 11px; }
+.agentboard-app .dashboard-codex-summary { min-height: 116px; align-self: center; margin: 0; padding: 20px 24px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+.agentboard-app .dashboard-summary-bubble { padding: 0; border: 0; border-radius: 0; background: transparent; }
+.agentboard-app .dashboard-codex-summary p { font-size: 14px; line-height: 1.9; color: var(--text-secondary); }
+.agentboard-app .dashboard-codex-mark { display: none; }
+.agentboard-app .dashboard-metrics { border: 1px solid var(--border); border-radius: 12px; background: var(--surface); box-shadow: none; }
+.agentboard-app .dashboard-metric { padding: 20px 24px; }
+.agentboard-app .dashboard-metric-value strong { font-size: 32px; font-weight: 600; }
+.agentboard-app .dashboard-metric-meter { height: 4px; flex-basis: 4px; }
+.agentboard-app .dashboard-analysis-heading { margin-top: 28px; }
+.agentboard-app .dashboard-analysis-heading h2 { font-size: 17px; letter-spacing: 0; }
+.agentboard-app .dashboard-grid { gap: 16px; }
+.agentboard-app .dashboard-panel { border: 1px solid var(--border); border-radius: 12px; background: var(--surface); box-shadow: none; }
+.agentboard-app .dashboard-panel > header { min-height: 52px; padding: 16px 20px; font-size: 13px; }
+.agentboard-app .dashboard-primary-panel { min-height: 260px; height: 260px; }
+.agentboard-app .dashboard-empty { color: var(--text-tertiary); font-size: 12px; }
+.agentboard-app .dashboard-priority-row { font-size: 12px; }
+.agentboard-app .agentboard-list { padding: 4px 36px 24px; }
+.agentboard-app .issue-list-group { margin-bottom: 14px; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+.agentboard-app .issue-list-group-header { padding: 14px 18px; background: var(--surface); font-size: 13px; }
+.agentboard-app .issue-list-row { min-height: 60px; padding: 14px 18px; background: transparent; }
+.agentboard-app .issue-list-title-cell { gap: 18px; }
+.agentboard-app .issue-list-title-cell strong { font-size: 13px; font-weight: 500; }
+.agentboard-app .issue-list-title-cell small { min-width: 62px; font-size: 11px; color: var(--text-tertiary); }
+.agentboard-app .agentboard-list-row time { font-size: 11px; }
+.agentboard-detail-backdrop, .agentboard-editor-backdrop { background: #06080dbc; }
+.agentboard-detail { width: min(100%, 740px); padding: 28px 40px; background: var(--bg); }
+.agentboard-detail-head { padding-bottom: 18px; border-bottom: 1px solid var(--border); font-size: 12px; }
+.agentboard-detail h2 { margin: 28px 0 22px; font-size: 27px; line-height: 1.5; letter-spacing: -.6px; }
+.agentboard-detail h3 { font-size: 14px; }
+.agentboard-detail section { padding: 28px 0; }
+.agentboard-detail .issue-description-document { font-size: 14px; line-height: 1.85; color: var(--text-secondary); user-select: text; }
+.agentboard-detail .issue-description-document h2 { font-size: 20px; }
+.agentboard-properties span { padding: 7px 11px; font-size: 12px; border: 1px solid var(--border); background: var(--surface); }
+.agentboard-artifact, .agentboard-event { padding: 18px; margin-bottom: 12px; border-radius: 10px; }
+.agentboard-editor { padding: 28px 32px; border-radius: 16px; background: var(--surface); }
+.agentboard-editor h2 { font-size: 23px; }
+.agentboard-editor label { gap: 9px; font-size: 13px; }
+.agentboard-editor form { gap: 20px; }
+.agentboard-editor input, .agentboard-editor textarea, .agentboard-editor select { padding: 11px 13px; border-radius: 8px; background: var(--bg); font-size: 14px; }
+.agentboard-editor footer { padding-top: 10px; }
+.agentboard-editor footer button { min-height: 38px; padding: 9px 18px; font-size: 13px; }
+.agentboard-editor :is(input, textarea, select):focus, .agentboard-login input:focus, .agentboard-app .taskdock-form input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.agentboard-app .taskdock-settings { padding: 24px 36px 48px; }
+.agentboard-app .taskdock-settings-panel { padding: 26px; }
+.agentboard-app .taskdock-panel-title h2 { font-size: 17px; }
+.agentboard-app .taskdock-form label { font-size: 12px; }
+.agentboard-app .taskdock-form input:not([type="checkbox"]) { min-height: 42px; font-size: 13px; }
+.agentboard-app .taskdock-settings-item strong, .agentboard-app .taskdock-agent-heading strong { font-size: 14px; }
+.agentboard-login { padding: 24px; }
+.agentboard-login form { width: min(100%, 440px); padding: 40px; gap: 20px; border-radius: 16px; background: var(--surface); box-shadow: 0 24px 80px #0004; }
+.agentboard-brand { display: flex; align-items: center; gap: 10px; font-size: 23px; font-weight: 700; }
+.agentboard-eyebrow { margin-top: 14px; color: var(--accent); font-size: 10px; letter-spacing: 2px; }
+.agentboard-login h1 { margin: -8px 0 0; font-size: 29px; font-weight: 650; letter-spacing: -.7px; }
+.agentboard-login p { font-size: 14px; line-height: 1.8; }
+.agentboard-login input { min-height: 46px; }
+.agentboard-login button { min-height: 46px; font-size: 14px; font-weight: 650; }
+.agentboard-app .board-toolbar .view-tab { width: auto; padding: 6px 15px; }
+.agentboard-app .board-toolbar .view-tab.active { background: var(--surface-active); border: 0; }
+.agentboard-app .agentboard-board-layout .board-column .column-header { flex-basis: 44px; background: transparent; border-radius: 0; }
+.agentboard-app .agentboard-board-layout .board-column .column-header::before { display: none; }
+.agentboard-app .agentboard-board-layout .board { grid-template-columns: repeat(7, minmax(272px, 1fr)); min-width: 2024px; }
+.agentboard-app .agentboard-board-layout .board-column.status-todo { --column-status-color: var(--accent); }
+.agentboard-app .agentboard-board-layout .board-column.status-in_progress { --column-status-color: var(--status-progress); }
+.agentboard-app .agentboard-board-layout .board-column.status-in_review { --column-status-color: var(--status-review); }
+.agentboard-app .column-list .column-empty { flex: 0 0 170px; }
+.agentboard-app .column-list .task-card { gap: 0; }
+.agentboard-app .column-list .task-card h3 { margin: 0 0 9px; }
+@media (max-width: 1050px) {
+  .app-shell.agentboard-app { grid-template-columns: 208px minmax(0, 1fr); }
+  .agentboard-app .agentboard-workspace-header { padding-inline: 24px; }
+  .agentboard-app .board-toolbar { padding-inline: 24px; flex-wrap: wrap; }
+  .agentboard-app .agentboard-board-layout, .agentboard-app .agentboard-list { padding-inline: 24px; }
+  .agentboard-app .dashboard-overview { grid-template-columns: 1fr; gap: 12px; }
+  .agentboard-app .dashboard-heading, .agentboard-app .dashboard-codex-summary { grid-column: span 1; min-height: auto; }
+}
+@media (max-width: 700px) {
+  .app-shell.agentboard-app { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
+  .agentboard-sidebar { padding: 10px 12px; }
+  .agentboard-sidebar nav { overflow: visible; }
+  .agentboard-sidebar-item { min-height: 36px; margin: 0; padding: 8px 10px; font-size: 12px; }
+  .agentboard-sidebar-brand, .agentboard-sidebar-footer, .agentboard-brand-caption { display: none; }
+  .agentboard-sidebar-label { margin: 0 6px; }
+  .agentboard-app .agentboard-workspace-header { min-height: 78px; height: 78px; flex-basis: 78px; padding-inline: 18px; }
+  .agentboard-page-heading h1 { font-size: 22px; }
+  .agentboard-app .board-toolbar { padding: 14px 16px; gap: 12px; }
+  .agentboard-app .view-tab { padding-inline: 10px; }
+  .agentboard-app .toolbar-tools { width: 100%; }
+  .agentboard-app .search-field { flex: 1; width: auto; min-width: 0; }
+  .agentboard-create-task { margin-left: auto; }
+  .agentboard-app .agentboard-board-layout, .agentboard-app .agentboard-list { padding-inline: 16px; }
+  .agentboard-app .dashboard-view.dashboard-view { padding-inline: 4px; }
+  .agentboard-app .dashboard-metric { padding: 16px; }
+  .agentboard-app .dashboard-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .agentboard-app .dashboard-metric { border-left: 0; border-bottom: 1px solid var(--border); }
+  .agentboard-app .dashboard-metric:nth-child(even) { border-left: 1px solid var(--border); }
+  .agentboard-app .dashboard-metric:last-child { grid-column: span 2; border-bottom: 0; }
+  .agentboard-detail { padding: 20px 24px; }
+  .agentboard-task-heading { align-items: flex-start; flex-wrap: wrap; gap: 0 12px; }
+  .agentboard-task-heading h2 { flex-basis: 100%; font-size: 23px; }
+  .agentboard-edit-task { margin-bottom: 18px; }
+  .agentboard-app .taskdock-settings { padding: 20px 16px; }
+  .agentboard-app .taskdock-settings-panel { padding: 20px; }
+  .agentboard-editor { padding: 24px; }
+  .agentboard-login form { padding: 30px; }
+  .agentboard-app .agentboard-list-row time, .agentboard-app .agentboard-list-agent { display: none; }
 }
