@@ -425,11 +425,11 @@ export function createTaskDockServer(options = {}) {
       if (rpc.method === "notifications/initialized") { response.writeHead(202); return response.end(); }
       if (rpc.method === "tools/list") return json(response, 200, { jsonrpc: "2.0", id: rpc.id, result: { tools: [
         ["list_tasks", "List tasks in an authorized project", { projectId: { type: "string" }, status: { type: "string" } }, []],
-        ["get_task", "Get one task and its current claim", { taskId: { type: "string" } }, ["taskId"]],
-        ["claim_task", "Claim an unclaimed todo", { taskId: { type: "string" }, version: { type: "integer" } }, ["taskId", "version"]],
-        ["release_task", "Release your claim", { taskId: { type: "string" }, version: { type: "integer" } }, ["taskId", "version"]],
-        ["update_task", "Update your claimed task", { taskId: { type: "string" }, version: { type: "integer" }, status: { type: "string" }, title: { type: "string" }, description: { type: "string" } }, ["taskId", "version"]],
-        ["add_comment", "Add context to a task", { taskId: { type: "string" }, body: { type: "string" } }, ["taskId", "body"]],
+        ["get_task", "Get one task and its current claim. claimedBy is current ownership, not historical execution; an unclaimed in_review or done task may already have outputs. Read full context via REST before acting.", { taskId: { type: "string" } }, ["taskId"]],
+        ["claim_task", "Claim an unclaimed active todo using its current version; sets in_progress. Keep the claim while executing or preparing handoff. Leave backlog and explicitly waiting tasks unclaimed.", { taskId: { type: "string" }, version: { type: "integer" } }, ["taskId", "version"]],
+        ["release_task", "Release your current claim using the latest task version. Completed handoff: submit outputs, comment, update to in_review, then release; in_review is preserved. Abandoning in_progress returns it to todo. done is preserved. Comments, artifacts and claim history remain.", { taskId: { type: "string" }, version: { type: "integer" } }, ["taskId", "version"]],
+        ["update_task", "Update your claimed task using its current version; use the returned version for the next update or release. Set in_review before releasing completed work. Mark done only with explicit user acceptance or instruction.", { taskId: { type: "string" }, version: { type: "integer" }, status: { type: "string" }, title: { type: "string" }, description: { type: "string" } }, ["taskId", "version"]],
+        ["add_comment", "Record progress, results, verification and remaining work. A comment does not change status or release the claim; keep ownership while continuing execution.", { taskId: { type: "string" }, body: { type: "string" } }, ["taskId", "body"]],
         ["submit_artifact", "Record an output on your claimed task", { taskId: { type: "string" }, type: { type: "string" }, title: { type: "string" }, content: { type: "string" }, url: { type: "string" }, attachmentId: { type: "string" } }, ["taskId", "type", "title"]],
       ].map(([name, description, properties, required]) => ({ name, description, inputSchema: { type: "object", properties, required } })) } });
       if (rpc.method === "tools/call") {
