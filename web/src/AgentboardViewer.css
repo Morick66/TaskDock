@@ -184,6 +184,8 @@
 .taskdock-onboarding-content { padding: 2px 20px 20px; border-top: 1px solid var(--border); }
 .taskdock-onboarding-head { align-items: center; margin: 16px 0 12px; }
 .taskdock-onboarding-head p { margin: 0; }
+.taskdock-prompt-options { display: flex; gap: 8px; margin-top: 16px; }
+.agentboard-app .taskdock-prompt-options button[aria-pressed="false"] { background: transparent; color: var(--text-secondary); border: 1px solid var(--border); }
 @media (max-width: 1100px) { .taskdock-settings-grid { grid-template-columns: 1fr; } }
 @media (max-width: 700px) {
   .app-shell.agentboard-app { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
