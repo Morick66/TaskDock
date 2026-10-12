@@ -5,6 +5,8 @@ description: Manage TaskDock projects and Agents or work on tasks through REST A
 
 # Work with TaskDock
 
+Task statuses and current claims are separate. `backlog` (待立项 / Backlog) records work not yet scheduled; leave it unclaimed. `todo` (待办 / To do) is approved to start and can be claimed when unclaimed and not explicitly waiting. `in_progress` is active execution; `in_review` is handed-off work awaiting review or user confirmation; `done` is accepted completion. A `todo` task may contain earlier partial work, so read its history before continuing. Use these API status values rather than UI labels in requests.
+
 `claimedBy` identifies the Agent currently holding a task, not its permanent executor. Task status and claim are separate: keep the claim while implementing, verifying, or preparing a handoff; an `in_review` task may remain claimed until handoff is complete. Releasing clears the current claim but preserves comments, artifacts, and claim/release activity. An unclaimed `in_review` or `done` task does not mean nobody worked on it; read its history to identify past executors. Historical `assignee` data is not proof of a current claim.
 
 Use the TaskDock server URL and Agent API Key configured by the user. Authenticate REST requests and remote MCP requests with `Authorization: Bearer <api-key>`. Never write the Key into a task, comment, artifact, or log.
