@@ -181,8 +181,8 @@ export function createTaskDockServer(options = {}) {
     if (name === "claim_task" || name === "release_task") return { task: transition(principal, task, name === "claim_task" ? "claim" : "release", args.version) };
     if (name === "update_task") {
       activeProject(task.projectId);
-      if (principal.role === "agent" && task.claimedBy?.id !== principal.id) {
-        throw new ApiError(403, "CLAIM_NOT_OWNED", "Only the claiming Agent can update this task");
+      if (principal.role === "agent" && task.claimedBy && task.claimedBy.id !== principal.id) {
+        throw new ApiError(403, "CLAIM_NOT_OWNED", "Task is claimed by another Agent");
       }
       const { taskId: _taskId, ...patch } = args;
       const { version, changes, assigneeTarget, threadId, threadBinding, agentSession } = parseTaskPatch(patch, () => null);
@@ -428,7 +428,7 @@ export function createTaskDockServer(options = {}) {
         ["get_task", "Get one task and its current claim", { taskId: { type: "string" } }, ["taskId"]],
         ["claim_task", "Claim an unclaimed todo", { taskId: { type: "string" }, version: { type: "integer" } }, ["taskId", "version"]],
         ["release_task", "Release your claim", { taskId: { type: "string" }, version: { type: "integer" } }, ["taskId", "version"]],
-        ["update_task", "Update your claimed task", { taskId: { type: "string" }, version: { type: "integer" }, status: { type: "string" }, title: { type: "string" }, description: { type: "string" } }, ["taskId", "version"]],
+        ["update_task", "Update an unclaimed task or your claimed task", { taskId: { type: "string" }, version: { type: "integer" }, status: { type: "string" }, title: { type: "string" }, description: { type: "string" } }, ["taskId", "version"]],
         ["add_comment", "Add context to a task", { taskId: { type: "string" }, body: { type: "string" } }, ["taskId", "body"]],
         ["submit_artifact", "Record an output on your claimed task", { taskId: { type: "string" }, type: { type: "string" }, title: { type: "string" }, content: { type: "string" }, url: { type: "string" }, attachmentId: { type: "string" } }, ["taskId", "type", "title"]],
       ].map(([name, description, properties, required]) => ({ name, description, inputSchema: { type: "object", properties, required } })) } });
