@@ -11,7 +11,7 @@ export const STATUS_DETAILS: Record<
   { label: string; tone: string }
 > = {
   backlog: { label: "待立项", tone: "backlog" },
-  todo: { label: "等待认领", tone: "todo" },
+  todo: { label: "待办", tone: "todo" },
   in_progress: { label: "处理中", tone: "progress" },
   in_review: { label: "等你确认", tone: "review" },
   blocked: { label: "遇到阻碍", tone: "blocked" },

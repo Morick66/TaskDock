@@ -250,7 +250,7 @@ export function AgentboardViewer() {
     <h3>{task.title}</h3>
     {task.description && <p className="task-card-description">{task.description.replace(/[#*`>]/g, "").replace(/\n+/g, " ")}</p>}
     {task.labels.length > 0 && <div className="agentboard-card-labels">{task.labels.slice(0, 2).map((label) => <span key={label}>{label}</span>)}{task.labels.length > 2 && <span>+{task.labels.length - 2}</span>}</div>}
-    <div className="agentboard-card-footer"><span className={task.claimedBy ? "agentboard-assigned" : ""}>{task.claimedBy?.name ?? "等待认领"}</span><time dateTime={task.updatedAt}>{new Date(task.updatedAt).toLocaleDateString("zh-CN", { month: "short", day: "numeric" })}</time></div>
+    <div className="agentboard-card-footer"><span className={task.claimedBy ? "agentboard-assigned" : ""}>{task.claimedBy?.name ?? "未认领"}</span><time dateTime={task.updatedAt}>{new Date(task.updatedAt).toLocaleDateString("zh-CN", { month: "short", day: "numeric" })}</time></div>
   </article>;
 
   return <TaskboardLanguageProvider language="zh"><div className="app-shell agentboard-app">
