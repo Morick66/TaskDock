@@ -22,6 +22,22 @@ TaskDock has one Web login. Use `TASKDOCK_USER_KEY` as the login Key. Every Agen
 
 In Web **管理设置**, expand **Agent 接入说明** and use **复制给 Agent** to get an installation prompt. It links to the public `GET /skills/taskdock-collaboration/SKILL.md` file and contains the REST and MCP URLs, but never includes an API Key. Configure each Agent's Key in that Agent's own environment or credential store.
 
+## Deploy the existing homelab service
+
+Use this entry point for subsequent production deployments:
+
+```sh
+node scripts/deploy-taskdock.mjs --ref HEAD
+```
+
+Run it from a clean, committed checkout containing the currently deployed revision. It uses the configured SSH host `homelab`, the existing Compose files and private `.env` in `/opt/data/appdata/taskdock/app`, and checks `https://taskdock.thisaray.com/health`. It does not read or print credentials.
+
+The script archives the specified commit, uploads it to a new release directory, builds a revision-labelled image, stops only the TaskDock service to back up its database and attachments, switches its Compose image, and checks health and the exact deployed revision. Other services remain running. Failed cutovers restore the previous Compose image; database backups and old images are retained for manual recovery.
+
+With unchanged dependency declarations and lockfile it reuses the running Node/dependency image and rebuilds Web only when Web, shared or package inputs changed. Use `--fresh-build` when dependencies change to build the repository Dockerfile. This requires access to the image and npm registries. Deployment rejects a revision that does not contain the running revision, so previously deployed changes are retained. It does not merge Git branches, change task statuses, or create a tagged desktop release.
+
+Backups are stored in `/opt/data/appdata/taskdock/backups/`; each release keeps `deployment.json` with the revision, image and backup path. To roll back an otherwise healthy deployment, restore the recorded backup's `compose.homelab.yaml` into `app/` and run the same Compose `up -d --no-build --no-deps taskdock` command. Restore data separately only when needed, with the service stopped.
+
 ## Import a local Taskboard
 
 Stop the old Taskboard before final cutover so no new writes occur after the snapshot. Run this command **before** the first `docker compose up`:
