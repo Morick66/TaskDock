@@ -45,7 +45,7 @@ export function createChecklistStore(db, actor) {
     parseExecutor(next.executor);
     if (!["pending", "done", "issue"].includes(next.status) || typeof next.ready !== "boolean" || typeof next.note !== "string" || next.note.length > 100_000) throw new ApiError(400, "INVALID_FIELD", "Invalid checklist status, readiness or note");
     if (!Array.isArray(next.attachmentIds) || next.attachmentIds.some((id) => typeof id !== "string" || !sql.prepare("SELECT 1 FROM attachments WHERE id = ? AND task_id = ?").get(id, task.id))) throw new ApiError(400, "INVALID_ATTACHMENT", "Checklist attachments must belong to this task");
-    if (principal.role === "agent" && ((before?.executor === "user" && (remove || next.status !== before.status || next.executor !== before.executor)) || (!before && next.executor === "user" && next.status !== "pending"))) {
+    if (principal.role === "agent" && ((before?.executor === "user" && (remove || next.status !== before.status || next.executor !== before.executor)) || (before?.executor !== "user" && next.executor === "user" && next.status !== "pending"))) {
       throw new ApiError(403, "USER_RESULT_REQUIRED", "Only the user can change the result of a user checklist item");
     }
     const at = new Date().toISOString();
