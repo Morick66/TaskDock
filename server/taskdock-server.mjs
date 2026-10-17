@@ -7,12 +7,18 @@ import { fileURLToPath } from "node:url";
 import { TaskboardDatabase } from "./database.mjs";
 import { ApiError, validateProjectId } from "../shared/api-fields.mjs";
 import { parseTaskCreate, parseTaskPatch, parseTaskFilters, parseProjectReadmeSave } from "../shared/task-input.mjs";
+import { createChecklistStore, parseExecutor, executorSchema, checklistProperties } from "./taskdock-checklists.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const MAX_BODY = 1024 * 1024;
 const CONTENT_TYPES = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml", ".png": "image/png", ".ico": "image/x-icon", ".json": "application/json" };
 const hash = (value) => createHash("sha256").update(value).digest("hex");
-const actor = (principal) => ({ type: "agent", id: principal.id, name: principal.name, avatarUrl: null });
+const actor = (principal) => principal.role === "admin"
+  ? { type: "user", id: "user", name: "你", avatarUrl: null }
+  : { type: "agent", id: principal.id, name: principal.name, avatarUrl: null };
+const executorActor = (executor) => executor === "user"
+  ? { type: "user", id: "user", name: "你", avatarUrl: null }
+  : { type: "agent", id: "taskdock-agent", name: "Agent", avatarUrl: null };
 const safeEqual = (left, right) => {
   const a = Buffer.from(hash(left), "hex");
   const b = Buffer.from(hash(right), "hex");
@@ -64,6 +70,7 @@ export function createTaskDockServer(options = {}) {
   }
   const db = new TaskboardDatabase(path.join(dataDir, "taskboard.sqlite"));
   const sql = db.database;
+  const checklists = createChecklistStore(db, actor);
   sql.exec(`
     CREATE TABLE IF NOT EXISTS agentboard_agents (id TEXT PRIMARY KEY, name TEXT NOT NULL, created_at TEXT NOT NULL, deleted_at TEXT);
     CREATE TABLE IF NOT EXISTS agentboard_agent_projects (agent_id TEXT NOT NULL REFERENCES agentboard_agents(id), project_id TEXT NOT NULL REFERENCES projects(id), PRIMARY KEY(agent_id, project_id));
@@ -120,17 +127,19 @@ export function createTaskDockServer(options = {}) {
     const task = db.getTask(id);
     if (!task) throw new ApiError(404, "TASK_NOT_FOUND", "Task not found");
     const claim = sql.prepare("SELECT a.id, a.name FROM agentboard_claims c JOIN agentboard_agents a ON a.id = c.agent_id WHERE c.task_id = ?").get(task.id);
-    return { ...task, claimedBy: claim ? actor(claim) : null };
+    return { ...task, executor: task.assignee.type, checklist: checklists.list(task.id), claimedBy: claim ? actor(claim) : null };
   }
   function event(taskId, principal, field, oldValue, newValue) {
-    sql.prepare(`INSERT INTO task_activities (id, task_id, actor_type, actor_id, actor_name, actor_avatar_url, changes, created_at) VALUES (?, ?, 'agent', ?, ?, NULL, ?, ?)`).run(
-      randomUUID(), taskId, principal.id, principal.name, JSON.stringify([{ field, before: oldValue, after: newValue }]), new Date().toISOString());
+    const who = actor(principal);
+    sql.prepare(`INSERT INTO task_activities (id, task_id, actor_type, actor_id, actor_name, actor_avatar_url, changes, created_at) VALUES (?, ?, ?, ?, ?, NULL, ?, ?)`).run(
+      randomUUID(), taskId, who.type, who.id, who.name, JSON.stringify([{ field, before: oldValue, after: newValue }]), new Date().toISOString());
   }
   function transition(principal, task, action, version) {
     activeProject(task.projectId);
     if (action === "claim" && principal.role !== "agent") throw new ApiError(403, "AGENT_REQUIRED", "Only an Agent can claim tasks");
     if (!Number.isSafeInteger(version) || version < 1) throw new ApiError(400, "INVALID_VERSION", "Current task version is required");
     const current = taskFor(principal, task.id);
+    if (action === "claim" && current.executor === "user") throw new ApiError(409, "USER_TASK", "This task is assigned to the user");
     if (current.version !== version) throw new ApiError(409, "VERSION_CONFLICT", "Task version changed");
     if (action === "claim" && (current.status !== "todo" || current.claimedBy || current.archivedAt)) {
       throw new ApiError(409, "TASK_NOT_CLAIMABLE", "Task must be an unclaimed, active todo");
@@ -178,15 +187,24 @@ export function createTaskDockServer(options = {}) {
     }
     if (name === "get_task") return { task: taskFor(principal, args.taskId) };
     const task = taskFor(principal, args.taskId);
+    if (["create_checklist_item", "update_checklist_item", "delete_checklist_item"].includes(name)) {
+      activeProject(task.projectId);
+      const { taskId, itemId, ...input } = args;
+      checklists.save(principal, task, name === "create_checklist_item" ? null : requiredString(itemId, "itemId"), input, name === "delete_checklist_item");
+      return { task: taskFor(principal, task.id) };
+    }
     if (name === "claim_task" || name === "release_task") return { task: transition(principal, task, name === "claim_task" ? "claim" : "release", args.version) };
     if (name === "update_task") {
       activeProject(task.projectId);
       if (principal.role === "agent" && task.claimedBy?.id !== principal.id) {
         throw new ApiError(403, "CLAIM_NOT_OWNED", "Only the claiming Agent can update this task");
       }
-      const { taskId: _taskId, ...patch } = args;
+      const { taskId: _taskId, executor, ...patch } = args;
+      if (executor !== undefined) parseExecutor(executor);
+      if (executor !== undefined && Object.keys(patch).length === 1) patch.title = task.title;
       const { version, changes, assigneeTarget, threadId, threadBinding, agentSession } = parseTaskPatch(patch, () => null);
       if (assigneeTarget !== undefined || threadId || threadBinding || agentSession || changes.projectId) throw new ApiError(400, "INVALID_FIELD", "AgentBoard task updates cannot change identity, project or session fields");
+      if (executor !== undefined) changes.assignee = executorActor(executor);
       return { task: taskFor(principal, db.updateTask(task.id, version, changes, undefined, undefined, actor(principal), undefined).id) };
     }
     if (name === "add_comment") {
@@ -368,10 +386,20 @@ export function createTaskDockServer(options = {}) {
     }
     if (pathname === "/api/tasks" && request.method === "POST") {
       const input = await body(request);
+      const executor = input.executor === undefined ? "agent" : parseExecutor(input.executor);
+      delete input.executor;
       const parsed = parseTaskCreate({ status: "todo", ...input }, () => null);
       activeProject(parsed.projectId);
       if (parsed.assigneeTarget || parsed.threadId || parsed.threadBinding || parsed.agentSession) throw new ApiError(400, "INVALID_FIELD", "AgentBoard does not accept client identity fields");
-      return json(response, 201, { task: taskFor(principal, db.createTask({ ...parsed, actor: actor(principal), assignee: actor(principal) }).id) });
+      return json(response, 201, { task: taskFor(principal, db.createTask({ ...parsed, actor: actor(principal), assignee: executorActor(executor) }).id) });
+    }
+    const checklistRoute = /^\/api\/tasks\/([^/]+)\/checklist(?:\/([^/]+))?$/.exec(pathname);
+    if (checklistRoute) {
+      const taskId = decodeURIComponent(checklistRoute[1]);
+      const itemId = checklistRoute[2] ? decodeURIComponent(checklistRoute[2]) : null;
+      if (request.method === "GET" && !itemId) return json(response, 200, { checklist: taskFor(principal, taskId).checklist });
+      const name = request.method === "POST" && !itemId ? "create_checklist_item" : request.method === "PATCH" && itemId ? "update_checklist_item" : request.method === "DELETE" && itemId ? "delete_checklist_item" : null;
+      if (name) return json(response, name === "create_checklist_item" ? 201 : 200, await operation(principal, name, { ...await body(request), taskId, itemId }));
     }
     const match = /^\/api\/tasks\/([^/]+)(?:\/(claim|release|comments|activities|artifacts|attachments))?$/.exec(pathname);
     if (match) {
@@ -403,6 +431,7 @@ export function createTaskDockServer(options = {}) {
         await writeFile(file, Buffer.concat(chunks), { flag: "wx" });
         try {
           const attachment = db.createAttachment(task.id, { id: attachmentId, kind: "attachment", filename, contentType: request.headers["content-type"] || "application/octet-stream", size });
+          event(task.id, principal, "attachment", null, { id: attachment.id, filename: attachment.filename });
           return json(response, 201, { attachment });
         } catch (error) { await unlink(file); throw error; }
       }
@@ -425,10 +454,13 @@ export function createTaskDockServer(options = {}) {
       if (rpc.method === "notifications/initialized") { response.writeHead(202); return response.end(); }
       if (rpc.method === "tools/list") return json(response, 200, { jsonrpc: "2.0", id: rpc.id, result: { tools: [
         ["list_tasks", "List tasks in an authorized project", { projectId: { type: "string" }, status: { type: "string" } }, []],
-        ["get_task", "Get one task and its current claim", { taskId: { type: "string" } }, ["taskId"]],
+        ["get_task", "Get a task, executor, checklist results and notes, and current claim. User updates do not start work; act only when instructed.", { taskId: { type: "string" } }, ["taskId"]],
         ["claim_task", "Claim an unclaimed todo", { taskId: { type: "string" }, version: { type: "integer" } }, ["taskId", "version"]],
         ["release_task", "Release your claim", { taskId: { type: "string" }, version: { type: "integer" } }, ["taskId", "version"]],
-        ["update_task", "Update your claimed task", { taskId: { type: "string" }, version: { type: "integer" }, status: { type: "string" }, title: { type: "string" }, description: { type: "string" } }, ["taskId", "version"]],
+        ["update_task", "Update your claimed task; checklist completion never accepts a task", { taskId: { type: "string" }, version: { type: "integer" }, status: { type: "string" }, title: { type: "string" }, description: { type: "string" }, executor: executorSchema }, ["taskId", "version"]],
+        ["create_checklist_item", "Add an actionable checklist item to your claimed task. User items start pending; do not complete user checks.", { taskId: { type: "string" }, version: { type: "integer" }, ...checklistProperties }, ["taskId", "version", "title", "executor"]],
+        ["update_checklist_item", "Edit a checklist item on your claimed task; only the user updates user results", { taskId: { type: "string" }, itemId: { type: "string" }, version: { type: "integer" }, ...checklistProperties }, ["taskId", "itemId", "version"]],
+        ["delete_checklist_item", "Remove an Agent checklist item on your claimed task", { taskId: { type: "string" }, itemId: { type: "string" }, version: { type: "integer" } }, ["taskId", "itemId", "version"]],
         ["add_comment", "Add context to a task", { taskId: { type: "string" }, body: { type: "string" } }, ["taskId", "body"]],
         ["submit_artifact", "Record an output on your claimed task", { taskId: { type: "string" }, type: { type: "string" }, title: { type: "string" }, content: { type: "string" }, url: { type: "string" }, attachmentId: { type: "string" } }, ["taskId", "type", "title"]],
       ].map(([name, description, properties, required]) => ({ name, description, inputSchema: { type: "object", properties, required } })) } });
