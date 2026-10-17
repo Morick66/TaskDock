@@ -417,7 +417,21 @@ export type TaskConversationRef = TaskConversationRefBase & (
   | { agentSession: AgentSession }
 );
 
+export interface ChecklistItem {
+  id: string;
+  title: string;
+  executor: "user" | "agent";
+  status: "pending" | "done" | "issue";
+  ready: boolean;
+  note: string;
+  attachmentIds: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Task {
+  executor?: "user" | "agent";
+  checklist?: ChecklistItem[];
   id: string;
   identifier: string;
   projectId: string;
@@ -551,6 +565,7 @@ export interface HostContext {
 }
 
 export interface TaskDraft {
+  executor?: "user" | "agent";
   title: string;
   description: string;
   status: TaskStatus;

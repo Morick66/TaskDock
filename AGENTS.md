@@ -1,5 +1,7 @@
 # Project Development Rules
 
+For production TaskDock deployments, use `node scripts/deploy-taskdock.mjs --ref <commit>` and follow `docs/taskdock-deployment.md`. Reuse this entry point instead of ad hoc SSH, Dockerfile, or Compose deployment commands. Deployment still requires user authorization.
+
 For feature work in this repository, use this order:
 
 1. Before implementation, prove the real operation path to the user: entry point → user or agent action → data change or other side effect → observable result. Cite the actual component, API, and file involved, or demonstrate the path in the product. This proof is not a test.

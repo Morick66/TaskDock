@@ -23,6 +23,7 @@ import { TaskboardIcon } from "./components/TaskboardIcon";
 import { DashboardView } from "./components/DashboardView";
 import { ProjectReadmeView } from "./components/ProjectReadmeView";
 import { TaskdockSettings } from "./TaskdockSettings";
+import { TaskdockPersonalView, TaskdockWork, needsUser, taskExecutor } from "./TaskdockWork";
 import type { TaskCardPresentation } from "./taskConversations";
 import "./AgentboardViewer.css";
 
@@ -41,6 +42,7 @@ function TaskdockTaskForm({ task, projects, projectId, onSave, onCancel }: {
   const [status, setStatus] = useState<TaskStatus>(task?.status ?? "todo");
   const [priority, setPriority] = useState<TaskDraft["priority"]>(task?.priority ?? "none");
   const [labels, setLabels] = useState(task?.labels.join(", ") ?? "");
+  const [executor, setExecutor] = useState<"user" | "agent">(task ? taskExecutor(task) : "agent");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -51,7 +53,7 @@ function TaskdockTaskForm({ task, projects, projectId, onSave, onCancel }: {
     setError("");
     try {
       await onSave(targetProject, {
-        title: title.trim(), description, status, priority,
+        title: title.trim(), description, status, priority, executor,
         labels: [...new Set(labels.split(/[,，]/).map((label) => label.trim()).filter(Boolean))],
         developmentContext: task?.developmentContext ?? null,
         startDate: task?.startDate ?? null, dueDate: task?.dueDate ?? null,
@@ -69,6 +71,7 @@ function TaskdockTaskForm({ task, projects, projectId, onSave, onCancel }: {
       <label>描述与验收标准<textarea rows={10} value={description} onChange={(event) => setDescription(event.target.value)} placeholder="支持 Markdown、表格、代码和 Mermaid" /></label>
       <div className="taskdock-form-row"><label>状态<select value={status} onChange={(event) => setStatus(event.target.value as TaskStatus)}>{TASK_STATUSES.map((value) => <option key={value} value={value}>{taskStatusLabel("zh", value)}</option>)}</select></label><label>优先级<select value={priority} onChange={(event) => setPriority(event.target.value as TaskDraft["priority"])}>{TASK_PRIORITIES.map((value) => <option key={value} value={value}>{taskPriorityLabel("zh", value)}</option>)}</select></label></div>
       <label>标签<input value={labels} onChange={(event) => setLabels(event.target.value)} placeholder="多个标签用逗号分隔" /></label>
+      <label>执行者<select value={executor} onChange={(event) => setExecutor(event.target.value as "user" | "agent")}><option value="user">我做</option><option value="agent">Agent 做</option></select></label>
       {error && <p className="agentboard-error" role="alert">{error}</p>}
       <footer><button type="button" onClick={onCancel} disabled={busy}>取消</button><button type="submit" disabled={busy || !targetProject}>{busy ? "保存中…" : "保存任务"}</button></footer>
     </form>
@@ -104,6 +107,15 @@ function activitySummary(activity: TaskChangeActivity): string {
   return activity.changes.map((change) => {
     if (change.field === "claim") return change.after ? "认领任务" : "释放任务";
     if (change.field === "artifact") return "提交任务产出";
+    if (change.field === "attachment") return `添加素材：${(change.after as { filename: string }).filename}`;
+    if (change.field === "assignee") return `执行者改为 ${(change.after as ActorIdentity).type === "user" ? "我" : "Agent"}`;
+    if (change.field === "checklist") {
+      const before = change.before as import("./types").ChecklistItem | null;
+      const after = change.after as import("./types").ChecklistItem | null;
+      if (!after) return `删除清单项：${before?.title}`;
+      const result = after.status === "done" ? "已完成" : after.status === "issue" ? "有问题" : "未完成";
+      return `${before ? "更新" : "添加"}清单项：${after.title}（${after.executor === "user" ? "我做" : "Agent 做"} · ${result} · ${after.ready ? "已就绪" : "尚未就绪"}）${after.note ? `\n\n${after.note}` : ""}`;
+    }
     if (change.field === "status") return `状态变更为 ${taskStatusLabel("zh", String(change.after) as TaskStatus)}`;
     return `更新 ${change.field}`;
   }).join("、");
@@ -123,7 +135,7 @@ export function AgentboardViewer() {
   const [editor, setEditor] = useState<{ task: Task | null } | null>(null);
   const [loadError, setLoadError] = useState("");
   const [search, setSearch] = useState("");
-  const [view, setView] = useState<"dashboard" | "board" | "list" | "readme" | "settings">("dashboard");
+  const [view, setView] = useState<"dashboard" | "board" | "list" | "readme" | "settings" | "personal">("dashboard");
   const [readmeRevision, setReadmeRevision] = useState(0);
   const [collapsed, setCollapsed] = useState<Set<TaskStatus>>(() => new Set(["backlog", "done", "canceled"]));
 
@@ -213,6 +225,11 @@ export function AgentboardViewer() {
     setEditor(null);
   }
 
+  function taskChanged(saved: Task) {
+    setTasks((current) => current.map((task) => task.id === saved.id ? saved : task));
+    setSelectedTask((current) => current?.id === saved.id ? saved : current);
+  }
+
   if (session === "loading") return <div className="agentboard-login">正在连接 TaskDock…</div>;
   if (session === "guest") {
     return <main className="agentboard-login"><form onSubmit={(event) => void submitLogin(event)}>
@@ -250,7 +267,7 @@ export function AgentboardViewer() {
     <h3>{task.title}</h3>
     {task.description && <p className="task-card-description">{task.description.replace(/[#*`>]/g, "").replace(/\n+/g, " ")}</p>}
     {task.labels.length > 0 && <div className="agentboard-card-labels">{task.labels.slice(0, 2).map((label) => <span key={label}>{label}</span>)}{task.labels.length > 2 && <span>+{task.labels.length - 2}</span>}</div>}
-    <div className="agentboard-card-footer"><span className={task.claimedBy ? "agentboard-assigned" : ""}>{task.claimedBy?.name ?? "等待认领"}</span><time dateTime={task.updatedAt}>{new Date(task.updatedAt).toLocaleDateString("zh-CN", { month: "short", day: "numeric" })}</time></div>
+    <div className="agentboard-card-footer"><span className={task.claimedBy ? "agentboard-assigned" : ""}>{taskExecutor(task) === "user" ? "我做" : task.claimedBy?.name ?? "Agent 做 · 未认领"}{(task.checklist?.length ?? 0) > 0 && ` · ${task.checklist!.filter((item) => item.status === "done").length}/${task.checklist!.length}`}</span><time dateTime={task.updatedAt}>{new Date(task.updatedAt).toLocaleDateString("zh-CN", { month: "short", day: "numeric" })}</time></div>
   </article>;
 
   return <TaskboardLanguageProvider language="zh"><div className="app-shell agentboard-app">
@@ -265,9 +282,11 @@ export function AgentboardViewer() {
       <button className={`view-tab${view === "dashboard" ? " active" : ""}`} type="button" onClick={() => setView("dashboard")}>仪表盘</button>
       <button className={`view-tab${view === "board" ? " active" : ""}`} type="button" onClick={() => setView("board")}>任务看板</button>
       <button className={`view-tab${view === "list" ? " active" : ""}`} type="button" onClick={() => setView("list")}>列表视图</button>
+      <button className={`view-tab${view === "personal" ? " active" : ""}`} type="button" onClick={() => setView("personal")}>等我处理 <span>{scopedTasks.filter(needsUser).length}</span></button>
       {projectId && projectId !== "local" && <button className={`view-tab${view === "readme" ? " active" : ""}`} type="button" onClick={() => setView("readme")}>项目文档</button>}
     </div><div className="toolbar-tools">{(view === "board" || view === "list") && <div className={`search-field${search ? " has-value" : ""}`}><TaskboardIcon name="search" width={16} height={16} /><input type="search" aria-label="搜索议题" placeholder="搜索任务…" value={search} onChange={(event) => setSearch(event.target.value)} /></div>}<button className="agentboard-create-task" type="button" disabled={activeProjects.length === 0} onClick={() => setEditor({ task: null })}><PlusIcon size={15} />新建任务</button><button className="agentboard-refresh" type="button" onClick={() => void reload().catch((error: unknown) => setLoadError(error instanceof Error ? error.message : "刷新失败"))} aria-label="刷新"><RefreshIcon size={16} /></button></div></div>}
     {loadError && <div role="alert" className="agentboard-error">{loadError}</div>}
+    {view === "personal" && <TaskdockPersonalView tasks={scopedTasks} onChanged={taskChanged} onOpen={setSelectedTask} />}
     {view === "dashboard" && <DashboardView projectId={projectId ?? "all"} projectCreatedAt={projectId ? projects.find((project) => project.id === projectId)?.createdAt ?? null : null} isAllProjects={!projectId} tasks={scopedTasks} presentations={presentations} currentUser={currentUser} animateSummary={false} onSummaryAnimationStart={() => undefined} onOpenTask={setSelectedTask} onOpenConversation={() => undefined} summaryOverride={dashboardSummary} taskdockMode />}
     {view === "readme" && projectId && projects.find((project) => project.id === projectId) && <ProjectReadmeView
       key={projectId}
@@ -287,6 +306,7 @@ export function AgentboardViewer() {
       <div className="agentboard-detail-head"><span>{selectedTask.identifier}</span><button type="button" onClick={() => setSelectedTask(null)} aria-label="关闭详情">×</button></div>
       <div className="agentboard-task-heading"><h2>{selectedTask.title}</h2><button className="agentboard-edit-task" type="button" onClick={() => setEditor({ task: selectedTask })}>编辑任务</button></div><div className="agentboard-properties"><span>状态：{taskStatusLabel("zh", selectedTask.status)}</span><span>优先级：{taskPriorityLabel("zh", selectedTask.priority)}</span><span>认领 Agent：{selectedTask.claimedBy?.name ?? "未认领"}</span>{selectedTask.labels.map((label) => <span key={label}>{label}</span>)}</div>
       <section><h3>描述</h3><MarkdownDocument value={selectedTask.description || "暂无描述"} /></section>
+      <section><div className="taskdock-detail-executor">执行者：{taskExecutor(selectedTask) === "user" ? "我做" : "Agent 做"}</div><TaskdockWork task={selectedTask} onChanged={taskChanged} /></section>
       <section><h3>任务附件</h3>{!detail ? <p>加载中…</p> : <TaskdockAttachments attachments={detail.attachments.filter((attachment) => !attachment.commentId)} emptyText="暂无附件" />}</section>
       <section><h3>任务产出</h3>{!detail ? <p>加载中…</p> : detail.artifacts.length === 0 ? <p>暂无产出</p> : detail.artifacts.map((artifact) => {
         const href = artifact.attachmentId ? resolveTaskboardUrl(`/api/attachments/${encodeURIComponent(artifact.attachmentId)}/download`) : safeUrl(artifact.url);

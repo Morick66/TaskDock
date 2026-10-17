@@ -1,4 +1,5 @@
 import type {
+  ChecklistItem,
   ActorIdentity,
   Artifact,
   AiChatCatalog,
@@ -627,6 +628,14 @@ export async function getTask(taskId: string, signal?: AbortSignal): Promise<Tas
     `/api/tasks/${encodeURIComponent(taskId)}`,
     { signal },
   );
+  return data.task;
+}
+
+export async function saveChecklistItem(task: Task, itemId: string | null, changes: Partial<ChecklistItem>, remove = false): Promise<Task> {
+  const data = await request<{ task: Task }>(`/api/tasks/${encodeURIComponent(task.id)}/checklist${itemId ? `/${encodeURIComponent(itemId)}` : ""}`, {
+    method: remove ? "DELETE" : itemId ? "PATCH" : "POST",
+    body: JSON.stringify({ version: task.version, ...changes }),
+  });
   return data.task;
 }
 
