@@ -57,7 +57,7 @@ try {
   run('git', ['archive', '--format=tar', `--output=${archive}`, revision]);
   let dockerfile;
   if (!fresh) {
-    dockerfile = webChanged ? `FROM ${current.id} AS web-build\nUSER root\nWORKDIR /build\nCOPY package.json package-lock.json ./\nRUN npm ci\nCOPY web ./web\nCOPY shared ./shared\nRUN npm run build:web\n` : '';
+    dockerfile = webChanged ? `FROM ${current.id} AS web-build\nUSER root\nWORKDIR /build\nCOPY package.json package-lock.json ./\nRUN npm ci --include=dev\nCOPY web ./web\nCOPY shared ./shared\nRUN npm run build:web\n` : '';
     dockerfile += `FROM ${current.id}\nWORKDIR /app\nCOPY package.json package-lock.json ./\nCOPY server ./server\nCOPY shared ./shared\nCOPY skills ./skills\n`;
     if (webChanged) dockerfile += 'COPY --from=web-build /build/dist/web ./dist/web\n';
     dockerfile += 'USER node\n';
