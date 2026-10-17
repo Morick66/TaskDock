@@ -58,7 +58,7 @@
 .agentboard-project-menu .project-menu-list { max-height: 360px; overflow-y: auto; }
 .agentboard-board-layout { flex: 1; min-height: 0; padding: 0 16px 8px; }
 .agentboard-board-layout .board-scroll { max-width: none; }
-.agentboard-board-layout .board { grid-template-columns: repeat(7, minmax(300px, 1fr)); min-width: 2244px; }
+.agentboard-board-layout .board { grid-template-columns: repeat(var(--taskdock-columns, 3), minmax(0, 1fr)); min-width: 0; }
 .agentboard-readonly-card { cursor: default; }
 .agentboard-readonly-card.selected { border-color: var(--accent); }
 .agentboard-readonly-card .task-card-description { overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
@@ -240,7 +240,7 @@
 .agentboard-create-task:hover, .agentboard-editor footer button[type="submit"]:hover, .agentboard-login button:hover { background: var(--accent-hover); }
 .agentboard-refresh { display: grid; place-items: center; width: 36px; height: 36px; border: 1px solid var(--border); border-radius: 8px; }
 .agentboard-app .agentboard-board-layout { padding: 4px 36px 24px; }
-.agentboard-board-layout .board { grid-template-columns: repeat(7, minmax(272px, 1fr)); min-width: 2024px; gap: 16px; }
+.agentboard-board-layout .board { grid-template-columns: repeat(var(--taskdock-columns, 3), minmax(0, 1fr)); min-width: 0; gap: 16px; }
 .agentboard-app .board-column { background: transparent; }
 .agentboard-app .column-header { height: 44px; padding: 0 6px; margin-bottom: 12px; border: 0; border-radius: 0; background: transparent; }
 .agentboard-app .column-heading { gap: 9px; width: 100%; }
@@ -329,7 +329,7 @@
 .agentboard-app .board-toolbar .view-tab.active { background: var(--surface-active); border: 0; }
 .agentboard-app .agentboard-board-layout .board-column .column-header { flex-basis: 44px; background: transparent; border-radius: 0; }
 .agentboard-app .agentboard-board-layout .board-column .column-header::before { display: none; }
-.agentboard-app .agentboard-board-layout .board { grid-template-columns: repeat(7, minmax(272px, 1fr)); min-width: 2024px; }
+.agentboard-app .agentboard-board-layout .board { grid-template-columns: repeat(var(--taskdock-columns, 3), minmax(0, 1fr)); min-width: 0; }
 .agentboard-app .agentboard-board-layout .board-column { width: 100%; min-width: 0; max-width: none; }
 .agentboard-app .agentboard-board-layout .board-column.status-todo { --column-status-color: var(--accent); }
 .agentboard-app .agentboard-board-layout .board-column.status-in_progress { --column-status-color: var(--status-progress); }
@@ -375,4 +375,75 @@
   .agentboard-editor { padding: 24px; }
   .agentboard-login form { padding: 30px; }
   .agentboard-app .agentboard-list-row time, .agentboard-app .agentboard-list-agent { display: none; }
+}
+
+/* Standalone task navigation and reading flow. */
+.agentboard-app .workspace { height: 100%; min-height: 0; }
+.agentboard-sidebar nav { min-width: 0; grid-template-columns: minmax(0, 1fr); overflow-x: hidden; }
+.agentboard-sidebar-item { max-width: 100%; }
+.agentboard-sidebar-item > :first-child, .agentboard-sidebar-item small { flex: 0 0 auto; }
+.agentboard-sidebar-item > span:nth-child(2) { flex: 1 1 0; }
+.agentboard-sidebar-item small { min-width: 30px; }
+.agentboard-sidebar-item { font-size: 14px; }
+.agentboard-brand-caption, .agentboard-sidebar-footer :is(span, strong, p),
+.agentboard-page-heading p, .agentboard-app .view-tab,
+.agentboard-app .task-identifier, .agentboard-card-footer,
+.agentboard-app .task-card-description, .agentboard-priority,
+.agentboard-app .agentboard-card-labels span, .agentboard-column-count,
+.agentboard-app .issue-list-title-cell small, .agentboard-app .agentboard-list-row time,
+.agentboard-list-row .agentboard-list-agent { font-size: 13px; }
+.agentboard-app .agentboard-board-layout { display: flex; flex-direction: column; gap: 12px; overflow: auto; }
+.agentboard-app .agentboard-board-layout .board-scroll { flex: 0 0 auto; overflow: visible; }
+.agentboard-app .agentboard-board-layout .board { display: grid; width: 100%; height: auto; min-height: 0; align-items: start; align-content: start; grid-auto-rows: max-content; }
+.agentboard-app .agentboard-board-layout .board-column { height: auto; }
+.agentboard-app .agentboard-board-layout .column-list { flex: 0 0 auto; height: auto; max-height: none; overflow: visible; }
+.taskdock-board-options { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; font-size: 13px; color: var(--text-tertiary); }
+.taskdock-board-options label { display: inline-flex; align-items: center; gap: 7px; min-height: 36px; color: var(--text-secondary); cursor: pointer; }
+.taskdock-board-options input { accent-color: var(--accent); }
+.taskdock-status-filter select { max-width: 140px; min-height: 38px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); font-size: 13px; }
+.taskdock-other-statuses { flex: none; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+.taskdock-other-statuses summary { padding: 14px 18px; cursor: pointer; color: var(--text-secondary); font-size: 13px; }
+.taskdock-other-statuses > div { display: flex; flex-wrap: wrap; gap: 10px; padding: 0 16px 16px; }
+.taskdock-other-statuses button { display: inline-flex; align-items: center; gap: 10px; min-height: 40px; padding: 8px 12px; border: 1px solid var(--border-strong); border-radius: 7px; background: var(--surface-raised); color: var(--text-secondary); }
+.taskdock-other-statuses button:hover { background: var(--surface-hover); }
+.taskdock-other-statuses button span { color: var(--text-tertiary); }
+.taskdock-view-empty { padding: 24px; color: var(--text-secondary); font-size: 14px; }
+.agentboard-app .dashboard-metric.is-actionable { appearance: none; margin: 0; border: 0; border-left: 1px solid var(--border); background: transparent; color: var(--text-primary); font: inherit; text-align: left; }
+.agentboard-app .dashboard-metric.is-actionable:first-child { border-left: 0; }
+.agentboard-app .dashboard-metric.is-actionable:hover { background: var(--surface-hover); }
+.agentboard-app .dashboard-metric.is-actionable:focus-visible { outline-offset: -4px; }
+.agentboard-app .dashboard-metric-label, .agentboard-app .dashboard-hero-value span,
+.agentboard-app .dashboard-empty, .agentboard-app .dashboard-priority-row { font-size: 13px; }
+.agentboard-app .issue-list-row { grid-template-columns: minmax(0, 1fr) max-content max-content; gap: 18px; border: 0; border-bottom: 1px solid var(--border); border-radius: 0; }
+.agentboard-app .issue-list-title-cell { flex: 1; min-width: 0; }
+.agentboard-app .issue-list-title-cell strong { overflow-wrap: anywhere; white-space: normal; font-size: 14px; }
+.agentboard-list-row .agentboard-list-agent { flex: 0 0 auto; margin-left: 0; }
+.agentboard-editor-backdrop, .agentboard-detail-backdrop { width: 100%; max-width: none; height: 100%; max-height: none; margin: 0; border: 0; background: transparent; color: var(--text-primary); }
+.agentboard-editor-backdrop:not([open]), .agentboard-detail-backdrop:not([open]) { display: none; }
+.agentboard-editor-backdrop::backdrop, .agentboard-detail-backdrop::backdrop { background: #0009; }
+.agentboard-detail-backdrop { padding: 0; }
+.taskdock-detail-tabs { display: flex; position: sticky; top: -28px; z-index: 1; gap: 8px; padding: 12px 0; background: var(--bg); border-bottom: 1px solid var(--border); }
+.taskdock-detail-tabs button { flex: 1; min-height: 42px; padding: 8px 10px; border: 1px solid transparent; border-radius: 7px; background: transparent; color: var(--text-secondary); font-size: 14px; }
+.taskdock-detail-tabs button[aria-pressed="true"] { border-color: var(--border-strong); background: var(--surface-active); color: var(--text-primary); }
+.taskdock-detail-tabs button:hover { background: var(--surface-hover); }
+.agentboard-detail .taskdock-detail-tabs + section { border-top: 0; }
+@media (max-width: 1050px) {
+  .agentboard-app .board-toolbar { align-items: flex-start; }
+  .agentboard-app .toolbar-tools { flex-wrap: wrap; }
+}
+@media (max-width: 700px) {
+  .agentboard-sidebar nav { overflow-x: auto; }
+  .agentboard-sidebar-label { white-space: nowrap; }
+  .agentboard-sidebar-item { max-width: 220px; flex-shrink: 0; min-height: 44px; }
+  .agentboard-sidebar-item > span:nth-child(2) { flex-basis: auto; }
+  .agentboard-app .toolbar-tools { gap: 8px; }
+  .agentboard-app .view-tabs { width: 100%; height: auto; flex-wrap: wrap; }
+  .agentboard-app .search-field { flex: 1 1 100%; }
+  .agentboard-app .issue-list-row { grid-template-columns: minmax(0, 1fr); grid-template-areas: "title" "agent"; gap: 6px; }
+  .agentboard-app .agentboard-list-row .agentboard-list-agent { display: block; grid-area: agent; padding-left: 80px; }
+  .agentboard-app .agentboard-board-layout .board { grid-template-columns: minmax(0, 1fr); }
+  .agentboard-app .agentboard-board-layout .board-scroll { flex-basis: auto; }
+  .agentboard-app .dashboard-metric.is-actionable { border-bottom: 1px solid var(--border); }
+  .agentboard-app .dashboard-metric.is-actionable:nth-child(odd) { border-left: 0; }
+  .taskdock-detail-tabs { top: -20px; }
 }

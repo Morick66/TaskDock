@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { createComment, getTask, listArtifacts, listAttachments, listComments, saveChecklistItem, updateTask, uploadAttachment, resolveTaskboardUrl } from "./api";
+import type { DetailSection } from "./taskdockNavigation";
 import type { Artifact, Attachment, ChecklistItem, Comment, Task } from "./types";
 import { MarkdownDocument } from "./components/MarkdownDocument";
 import { taskStatusLabel } from "./i18n";
@@ -9,6 +10,9 @@ export const taskExecutor = (task: Task) => task.executor ?? task.assignee.type;
 const active = (task: Task) => !["done", "canceled"].includes(task.status) && !task.archivedAt;
 const pendingUserItems = (task: Task) => (task.checklist ?? []).filter((item) => item.executor === "user" && item.status !== "done");
 export const needsUser = (task: Task) => active(task) && (taskExecutor(task) === "user" || pendingUserItems(task).length > 0);
+export const readyForUser = (task: Task) => needsUser(task) && (taskExecutor(task) === "user"
+  ? !["backlog", "blocked"].includes(task.status)
+  : pendingUserItems(task).some((item) => item.ready));
 
 export function WorkAttachments({ attachments }: { attachments: Attachment[] }) {
   return <ul className="agentboard-attachments">{attachments.map((attachment) => <li key={attachment.id}>
@@ -55,7 +59,7 @@ function ChecklistRow({ item, busy, attachments, onSave, onUpload, onRemove }: {
   </div>;
 }
 
-export function TaskdockWork({ task, onChanged, userOnly = false }: { task: Task; onChanged: (task: Task) => void; userOnly?: boolean }) {
+export function TaskdockWork({ task, onChanged, userOnly = false, onViewHistory }: { task: Task; onChanged: (task: Task) => void; userOnly?: boolean; onViewHistory?: () => void }) {
   const latestTask = useRef(task);
   latestTask.current = task;
   const saving = useRef(false);
@@ -115,11 +119,12 @@ export function TaskdockWork({ task, onChanged, userOnly = false }: { task: Task
     <div className="taskdock-checklist">{current.map(row)}{items.length === 0 && <p className="taskdock-muted">添加测试项、素材准备或其他执行步骤。</p>}</div>
     {later.length > 0 && <details className="taskdock-check-group"><summary>后续需要{userOnly ? "我" : "处理"} · {later.length}</summary>{later.map(row)}</details>}
     {done.length > 0 && <details className="taskdock-check-group"><summary>已完成 · {done.length}</summary>{done.map(row)}</details>}
-    <form className="taskdock-add-item" onSubmit={(event) => void addItem(event)}>
+    <details className="taskdock-add-disclosure"><summary>添加清单项</summary><form className="taskdock-add-item" onSubmit={(event) => void addItem(event)}>
       <label>添加清单项<input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="例如：试玩角色切换，确认待命状态保留" maxLength={1000} required disabled={busy} /></label>
       <div className="taskdock-work-actions"><label>执行者<select value={executor} onChange={(event) => setExecutor(event.target.value as ChecklistItem["executor"])} disabled={busy}><option value="user">我做</option><option value="agent">Agent 做</option></select></label><label className="taskdock-ready"><input type="checkbox" checked={ready} onChange={(event) => setReady(event.target.checked)} disabled={busy} />现在可以开始</label><button type="submit" disabled={busy || !title.trim()}>添加</button></div>
-    </form>
+    </form></details>
     <details className="taskdock-context" open={userOnly || undefined}><summary>反馈与素材</summary>
+      <div className="taskdock-recent-heading"><span>最近 {Math.min(3, comments.length)} 条评论</span>{onViewHistory && <button type="button" onClick={onViewHistory}>查看完整历史</button>}</div>
       {comments.slice(-3).map((comment) => <article className="taskdock-remark" key={comment.id}><small>{comment.authorName} · {new Date(comment.createdAt).toLocaleString()}</small><MarkdownDocument value={comment.body} /></article>)}
       <form onSubmit={(event) => { event.preventDefault(); void run(async () => { await createComment(task.id, remark); setRemark(""); }); }}>
         <label>任务备注<textarea value={remark} onChange={(event) => setRemark(event.target.value)} rows={3} placeholder="记录测试现象、准备进度或素材所在路径" disabled={busy} /></label>
@@ -131,7 +136,7 @@ export function TaskdockWork({ task, onChanged, userOnly = false }: { task: Task
   </div>;
 }
 
-function PersonalTask({ task, onChanged, onOpen }: { task: Task; onChanged: (task: Task) => void; onOpen: (task: Task) => void }) {
+function PersonalTask({ task, onChanged, onOpen }: { task: Task; onChanged: (task: Task) => void; onOpen: (task: Task, section?: DetailSection) => void }) {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   async function changeStatus(status: Task["status"]) {
@@ -144,18 +149,18 @@ function PersonalTask({ task, onChanged, onOpen }: { task: Task; onChanged: (tas
     <header><div><small>{task.identifier} · {taskExecutor(task) === "user" ? "我负责" : "Agent 负责"}</small><h2>{task.title}</h2></div><button type="button" onClick={() => onOpen(task)}>打开完整任务</button></header>
     {taskExecutor(task) === "user" && <label className="taskdock-personal-status">任务状态<select aria-label={`${task.identifier} 任务状态`} value={task.status} disabled={busy} onChange={(event) => void changeStatus(event.target.value as Task["status"])}>{["backlog", "todo", "in_progress", "in_review", "done", "blocked", "canceled"].map((status) => <option key={status} value={status}>{status === "todo" ? "待办" : taskStatusLabel("zh", status as Task["status"])}</option>)}</select></label>}
     {error && <p role="alert" className="agentboard-error">{error}</p>}
-    <TaskdockWork task={task} onChanged={onChanged} userOnly />
+    <TaskdockWork task={task} onChanged={onChanged} onViewHistory={() => onOpen(task, "history")} userOnly />
   </article>;
 }
 
-export function TaskdockPersonalView({ tasks, onChanged, onOpen }: { tasks: Task[]; onChanged: (task: Task) => void; onOpen: (task: Task) => void }) {
+export function TaskdockPersonalView({ tasks, onChanged, onOpen }: { tasks: Task[]; onChanged: (task: Task) => void; onOpen: (task: Task, section?: DetailSection) => void }) {
   const priorities = ["urgent", "high", "medium", "low", "none"];
   const mine = tasks.filter(needsUser).sort((a, b) => priorities.indexOf(a.priority) - priorities.indexOf(b.priority) || a.updatedAt.localeCompare(b.updatedAt));
-  const ready = mine.filter((task) => taskExecutor(task) === "user" ? !["backlog", "blocked"].includes(task.status) : pendingUserItems(task).some((item) => item.ready));
+  const ready = mine.filter(readyForUser);
   const later = mine.filter((task) => !ready.includes(task));
   return <div className="taskdock-personal-view"><div className="taskdock-personal-heading"><h2>等我处理 <span>{ready.length}</span></h2><p>完成自己的事项，记录反馈和素材。Agent 会在你安排它工作时读取最新进展。</p></div>
-    {ready.length === 0 && <div className="taskdock-personal-empty">当前没有需要你处理的事项。</div>}
+    {ready.length === 0 && <div className="taskdock-personal-empty">当前没有可以开始的事项。后续事项会在就绪后出现在这里。</div>}
     {ready.map((task) => <PersonalTask key={task.id} task={task} onChanged={onChanged} onOpen={onOpen} />)}
-    {later.length > 0 && <details className="taskdock-personal-later"><summary>后续需要我 · {later.length} 个任务</summary>{later.map((task) => <PersonalTask key={task.id} task={task} onChanged={onChanged} onOpen={onOpen} />)}</details>}
+    {later.length > 0 && <details className="taskdock-personal-later"><summary>尚未就绪 · {later.length} 个任务</summary>{later.map((task) => <PersonalTask key={task.id} task={task} onChanged={onChanged} onOpen={onOpen} />)}</details>}
   </div>;
 }
