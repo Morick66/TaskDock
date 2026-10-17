@@ -57,3 +57,10 @@
   .agentboard-app .board-toolbar { flex-wrap: wrap; gap: 8px; }
   .agentboard-app .view-tabs { flex-wrap: wrap; }
 }
+
+.taskdock-work .taskdock-recent-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; color: var(--text-tertiary); font-size: 13px; }
+.taskdock-work .taskdock-add-disclosure { border-top: 1px solid var(--border); }
+.taskdock-work .taskdock-add-disclosure > summary { color: var(--text-primary); font-size: 13px; }
+.taskdock-work .taskdock-add-item { margin: 0 0 16px; }
+.taskdock-work label, .taskdock-work button, .taskdock-personal-task > header button,
+.taskdock-work-heading p, .taskdock-save-state, .taskdock-remark small { font-size: 13px; }

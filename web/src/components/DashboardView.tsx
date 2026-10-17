@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import "./DashboardView.css";
 import dueDoneIcon from "../assets/figma-taskboard/dashboard-due-done.svg";
@@ -12,7 +12,7 @@ import type {
   TaskCardPresentation,
   TaskConversationItem,
 } from "../taskConversations";
-import type { ActorIdentity, ProjectSummary, Task } from "../types";
+import type { ActorIdentity, ProjectSummary, Task, TaskStatus } from "../types";
 import { ActorAvatar } from "./ActorAvatar";
 import { PriorityIcon } from "./SemanticIcons";
 import { TaskConversationMenu } from "./TaskConversationMenu";
@@ -30,6 +30,7 @@ interface DashboardViewProps {
   onOpenConversation: (conversation: TaskConversationItem) => void;
   summaryOverride?: string;
   taskdockMode?: boolean;
+  onNavigateTasks?: (filter: TaskStatus | "overdue") => void;
 }
 
 const PRIORITIES = ["urgent", "high", "medium", "low", "none"] satisfies Task["priority"][];
@@ -511,8 +512,10 @@ export function DashboardView({
   onOpenConversation,
   summaryOverride,
   taskdockMode = false,
+  onNavigateTasks,
 }: DashboardViewProps) {
-  const { language, locale, text } = useTaskboardI18n();
+  const { language, locale, text: translate } = useTaskboardI18n();
+  const text = useCallback((chinese: string, english: string) => translate(taskdockMode ? chinese.replaceAll("议题", "任务") : chinese, english), [translate, taskdockMode]);
   const [projectSummary, setProjectSummary] = useState<ProjectSummary | null>(null);
   const [summaryLoadFailed, setSummaryLoadFailed] = useState(false);
   useEffect(() => {
@@ -713,14 +716,14 @@ export function DashboardView({
   ), [presentations, tasks]);
 
   const attentionItems = useMemo(() => activeTasks
-    .filter((task) => task.status === "blocked" || presentations[task.id]?.unread)
+    .filter((task) => task.status === "blocked" || (taskdockMode && task.status === "in_review") || presentations[task.id]?.unread)
     .sort((left, right) => {
       const leftUnread = presentations[left.id]?.unread ? 1 : 0;
       const rightUnread = presentations[right.id]?.unread ? 1 : 0;
       return rightUnread - leftUnread
         || right.activityUpdatedAt.localeCompare(left.activityUpdatedAt);
     })
-    .slice(0, 5), [activeTasks, presentations]);
+    .slice(0, 5), [activeTasks, presentations, taskdockMode]);
 
   const summaryBody = isAllProjects
     ? text(
@@ -783,8 +786,10 @@ export function DashboardView({
         <div className="dashboard-metrics">
           {metrics.map((metric) => {
             const percent = activeTasks.length ? Math.round((metric.value / activeTasks.length) * 100) : 0;
+            const Metric = onNavigateTasks ? "button" : "article";
+            const filter = ({ progress: "in_progress", review: "in_review", blocked: "blocked", overdue: "overdue", backlog: "backlog" } as const)[metric.tone as "progress" | "review" | "blocked" | "overdue" | "backlog"];
             return (
-              <article className={`dashboard-metric tone-${metric.tone}`} key={metric.label}>
+              <Metric type={onNavigateTasks ? "button" : undefined} onClick={onNavigateTasks ? () => onNavigateTasks(filter) : undefined} className={`dashboard-metric tone-${metric.tone}${onNavigateTasks ? " is-actionable" : ""}`} key={metric.label}>
                 <span className="dashboard-metric-label">{metric.label}</span>
                 <div className="dashboard-metric-value">
                   <strong>{metric.value}</strong>
@@ -793,7 +798,7 @@ export function DashboardView({
                 <span className="dashboard-metric-meter" aria-hidden="true">
                   <i style={{ width: `${percent}%` }} />
                 </span>
-              </article>
+              </Metric>
             );
           })}
         </div>
@@ -822,7 +827,7 @@ export function DashboardView({
           </section>
 
           <section className="dashboard-panel dashboard-primary-panel dashboard-attention-panel">
-            <header><span>{text("需要关注（未读、阻塞）", "Needs attention (unread, blocked)")}</span></header>
+            <header><span>{taskdockMode ? "待确认与阻塞" : text("需要关注（未读、阻塞）", "Needs attention (unread, blocked)")}</span></header>
             <div className="dashboard-task-list">
               {attentionItems.length ? attentionItems.map((task) => (
                 <button
@@ -875,7 +880,7 @@ export function DashboardView({
                   </div>
                 </article>
               )) : (
-                <div className="dashboard-empty">{taskdockMode ? "当前没有 Agent 正在处理的议题" : text("当前没有运行中的对话", "No active conversations")}</div>
+                <div className="dashboard-empty">{taskdockMode ? "当前没有 Agent 正在处理的任务" : text("当前没有运行中的对话", "No active conversations")}</div>
               )}
             </div>
           </section>
